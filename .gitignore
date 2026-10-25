@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+.cache/
+coverage/
+*.log
+*.tsbuildinfo
+Thumbs.db
+.DS_Store
+
+# Never commit machine-specific or secret-bearing config.
+.env
+.env.*
+*.local
+opencode.json
