@@ -26,17 +26,20 @@ then ~600 ms to classify on every subsequent open.
 
 ## Install and run
 
-Requirements: **Windows 10/11**, **Node.js 20+** (22 recommended), ~400 MB for `node_modules`.
+**Download a build** from [Releases](https://github.com/masterdorime/opendump/releases):
+a single-file **portable `.exe`** (no install) or a per-user **installer**.
+
+The binaries are **unsigned**, so Windows SmartScreen shows "Unknown publisher" and may require
+*More info → Run anyway*. That is expected — signing needs a certificate this project doesn't
+have yet.
+
+To run from source instead — Windows 10/11, Node.js 20+ (22 recommended):
 
 ```bash
-# from a checkout of this repository
 npm install
 npm run build
 npm start          # or: npm run dev  (hot reload)
 ```
-
-**No prebuilt binary yet.** Running from source is the supported path until packaging lands
-(see [Roadmap](#roadmap)).
 
 On first launch, click **Scan drive**. The scan is a one-time cost; results are cached in
 `%APPDATA%\Drive Size Audit\scan-cache.json`, so every later open is instant.
@@ -196,8 +199,8 @@ under a second.
 - **Elevated tier** — `hiberfil.sys`, Windows Update cache, DISM component cleanup, behind a
   separate UAC-gated helper that re-validates every path itself.
 - **Duplicates and verification reporting.**
-- **Packaging** — installer and portable build, code signing, and an uninstaller that asks what
-  to do with anything still staged.
+- **Packaging polish** — code signing, an auto-update channel, and an application icon
+  (the default Electron icon is used today).
 - **Chat over the index** — ask questions about the scan with read-only tools, not a general
   assistant.
 
@@ -228,8 +231,8 @@ touch a real scan target. Run them with `npm test`.
 
 - **Windows only.** The scanner, path rules, Known Folder resolution and the executor are all
   Win32-specific.
-- **No prebuilt binary, no installer, no code signing.** Build from source. An unsigned
-  Electron build would trigger SmartScreen anyway.
+- **Unsigned binaries.** Portable and installer builds exist, but there is no code-signing
+  certificate: SmartScreen shows "Unknown publisher", and there is no auto-update channel.
 - **The elevated tier is missing.** `hiberfil.sys`, the Windows Update cache and `WinSxS` are
   deliberately untouched — the app will not ask for administrator rights in this version.
 - **One volume at a time.** Point it at a drive with `DSA_DRIVE`. Quarantine is created on the
