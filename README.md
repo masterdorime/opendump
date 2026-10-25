@@ -174,7 +174,11 @@ protection.
 
 Put personal rules in `rules/overrides.json` (same shape, `{ "rules": [ ... ] }`). They are
 prepended to the shipped set, so they win the first-match race, and they survive an app
-update. This is the file to hand someone when they say "my tool keeps showing up as unclassified".
+update. Copy [`rules/overrides.example.json`](rules/overrides.example.json) to start.
+
+Note that matchers on one rule are **ANDed**, and rule order is semantic — a specific rule must
+come before the general one it overrides. That is why the shipped rules stay in a single ordered
+file rather than being split by topic. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Add a rule, run `npm run scan -- 'C:\' --cached`, and the new classification appears in
 under a second.
@@ -246,6 +250,12 @@ No telemetry, no analytics, no network calls during scanning or cleanup. The app
 names and sizes to compute totals — it does not read file contents. An optional local or cloud
 model provider exists in `src/shared/ai/`, but it is not reachable from the UI in this version;
 if you wire it up yourself, nothing is sent anywhere until you configure a provider.
+
+## Contributing
+
+The useful contribution is a rule, not code — the classifier is data. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the rule format and the invariants that will not be
+merged away, and open a **Misclassified folder** issue if a folder gets the wrong tier.
 
 ## License
 

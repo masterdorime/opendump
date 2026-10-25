@@ -1,0 +1,70 @@
+name: Misclassified folder
+description: A folder gets the wrong tier, or a safe one is missing
+title: "[rules] "
+labels: ["rules"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove your username from any path — replace `C:\Users\yourname` with `%USERPROFILE%`.
+        This report becomes a public rule, so include only what you are comfortable publishing.
+  - type: input
+    id: path
+    attributes:
+      label: Folder path
+      description: With environment tokens where possible.
+      placeholder: "%LOCALAPPDATA%\\SomeApp\\Cache"
+    validations:
+      required: true
+  - type: input
+    id: size
+    attributes:
+      label: Size on disk
+      placeholder: "4.2 GB"
+    validations:
+      required: true
+  - type: dropdown
+    id: current
+    attributes:
+      label: What does it get now?
+      options:
+        - SAFE_PURGE (Safe)
+        - REVIEW (Review)
+        - KEEP (Keep)
+        - LOCKED (Locked)
+        - Not listed at all
+    validations:
+      required: true
+  - type: dropdown
+    id: expected
+    attributes:
+      label: What should it be?
+      options:
+        - SAFE_PURGE (Safe)
+        - REVIEW (Review)
+        - KEEP (Keep)
+        - LOCKED (Locked)
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: >
+        What does the folder contain, and what happens if it is deleted? "It rebuilds on next
+        launch" is a good reason. "It looks like a cache" is not.
+    validations:
+      required: true
+  - type: textarea
+    id: contents
+    attributes:
+      label: File listing (optional)
+      description: >
+        Top files by size, or an extension breakdown. This is the most useful evidence — it is
+        how the CapCut cache case was caught.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: "0.1.0"

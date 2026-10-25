@@ -1,0 +1,36 @@
+appId: ai.opendump.drivesizeaudit
+productName: Drive Size Audit
+copyright: Copyright © 2026 Tristan
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# The main process reads rules from process.resourcesPath when packaged.
+extraResources:
+  - from: rules
+    to: rules
+
+win:
+  target:
+    - target: portable
+      arch: [x64]
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  # Never destroy staged files on uninstall — quarantine may hold recoverable data.
+  deleteAppDataOnUninstall: false
+  artifactName: ${productName}-${version}-setup.${ext}

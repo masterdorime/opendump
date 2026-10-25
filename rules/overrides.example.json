@@ -1,0 +1,28 @@
+{
+  "$comment": "Copy this file to rules/overrides.json. Rules here are prepended to the shipped set, so they win the first-match race and survive an app update. Delete the file to return to defaults.",
+  "version": 1,
+  "rules": [
+    {
+      "id": "my-tool-cache",
+      "tier": "SAFE_PURGE",
+      "category": "App cache",
+      "reason": "MyTool rebuilds this on launch, it holds no user state.",
+      "match": { "prefix": "%LOCALAPPDATA%\\MyTool\\Cache" }
+    },
+    {
+      "id": "my-code-node-modules",
+      "tier": "SAFE_PURGE",
+      "category": "Build artifact",
+      "reason": "Dependencies inside my code folder, restored by `npm install`.",
+      "requiresSibling": "package.json",
+      "match": { "prefix": "%USERPROFILE%\\code", "name": "node_modules" }
+    },
+    {
+      "id": "my-vm-images",
+      "tier": "REVIEW",
+      "category": "VM images",
+      "reason": "Re-downloadable but expensive to rebuild. Confirm before removing.",
+      "match": { "prefix": "%USERPROFILE%\\VMs" }
+    }
+  ]
+}
