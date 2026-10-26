@@ -16,3 +16,6 @@ Thumbs.db
 *.local
 opencode.json
 rules/overrides.json
+
+# brag video output - deliverable, not source
+brag-output*/
