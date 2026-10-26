@@ -268,17 +268,20 @@ Environment overrides (also used by the screenshot harness):
 
 Two separate incidents:
 
-- `Set-Content -Encoding utf8` writes a **BOM**. Vite/PostCSS then fails with
-  `Unexpected token '﻿'` when parsing `package.json`. It reached `main` and broke CI.
-- `Get-Content -Raw` + `Set-Content` round-trip reads as CP1252 and writes UTF-8, turning
-  `—` into `â€”` across four files.
+- `Set-Content -Encoding utf8` writes a **BOM** (bytes `EF BB BF`). Vite/PostCSS then fails with
+  `Unexpected token` when parsing `package.json`. It reached `main` and broke CI.
+- A `Get-Content -Raw` + `Set-Content` round-trip reads as CP1252 and writes UTF-8, so an em dash
+  (`U+2014`, bytes `E2 80 94`) is re-encoded as three garbage characters. This hit four files.
 
 **Rule: never round-trip source through PowerShell.** Use the `edit`/`write` tools, or Node with
-explicit `utf8`. Before committing run:
+explicit `utf8`. Before committing, scan tracked files for a leading BOM and for the CP1252
+mis-decode signature:
 
 ```bash
-node -e "const fs=require('fs'),{execSync}=require('child_process');for(const f of execSync('git ls-files',{encoding:'utf8'}).split('\n').filter(f=>/\.(ts|tsx|json|md|css|yml)$/.test(f)&&fs.existsSync(f))){const b=fs.readFileSync(f);if(b[0]===0xef&&b[1]===0xbb)console.log('BOM',f);if(/â€|Ã©|Ã¢/.test(b.toString('utf8')))console.log('MOJIBAKE',f)}"
+node -e "const fs=require('fs'),{execSync}=require('child_process');for(const f of execSync('git ls-files',{encoding:'utf8'}).split('\n').filter(f=>f!=='AGENTS.md'&&/\.(ts|tsx|json|md|css|yml)$/.test(f)&&fs.existsSync(f))){const b=fs.readFileSync(f);if(b[0]===0xef&&b[1]===0xbb)console.log('BOM',f);if(/\xC3\xA2\xE2\x82\xAC|\xC3\x83\xC2\xA9/.test(b.toString('latin1')))console.log('MOJIBAKE',f)}"
 ```
+
+(`AGENTS.md` is skipped because it contains the detector pattern itself.)
 
 ### 9.2 Files that must never be committed
 
