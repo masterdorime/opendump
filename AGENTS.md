@@ -365,6 +365,23 @@ installer + portable build, CI, releases.
 - Cloud provider has never been exercised against a real endpoint.
 - `.scan-track` CSS may be orphaned after the scan bar rebuild.
 
+### V2 (Rust) — a sibling repo, not a replacement
+
+`https://github.com/masterdorime/opendump-v2` — pre-alpha Rust core.
+
+- **Ported:** rule engine, token expansion, types. 10 tests mirroring the invariants below.
+- **Not ported:** scanner, executor, Tauri shell, AI. **Nothing there can delete a file.**
+- It is a deliberate rewrite, not a transliteration. Same four invariants, same expectations.
+
+Rules for working across the two:
+
+- **Do not link v2 from this repo's user-facing README** until v2 can scan, classify, quarantine
+  and purge. Pointing users at a pre-alpha undermines trust in the release that works.
+- **Do not call v2 "built in Rust" as a product claim yet.** Only the core is Rust; there is no
+  app. The v2 README states this explicitly — keep it that way until it ships.
+- The measured motivation: this app is 366 MB installed and idles at 377 MB. The real prize for
+  Rust is an **MFT scanner** that could cut the 172–299 s scan to seconds — not the UI shell.
+
 ---
 
 ## 12. Conventions
