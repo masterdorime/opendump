@@ -370,13 +370,15 @@ installer + portable build, CI, releases.
 `https://github.com/masterdorime/opendump-v2` — pre-alpha Rust core + CLI, 24 tests.
 
 - **Ported:** rule engine, scanner, executor (quarantine/restore/purge + journal), CLI, and a
-  Tauri desktop shell (9.98 MB exe, 2.26 MB installer).
-- **Not ported:** v0.5's treemap, spotlight tour, purge-confirmation screen, live memory meters,
-  AI layer, `find_unclassified`, MFT reader.
+  native egui window — no webview, 6.2 MB exe.
+- **Not ported:** v0.5's treemap, spotlight tour, filename-by-filename purge confirmation, live
+  memory meters, AI layer, `find_unclassified`, MFT reader.
 - **It is now an app**, if a minimal one: scan → review → quarantine → restore → purge in a
   window. The v0.5 UI is still the richer product.
-- Measured: full `C:\` scan in **102.8 s** (CLI) / 165 s through the Tauri window vs 172–299 s
-  for this app. Classifications match v1 where they overlap.
+- Measured: full `C:\` scan in **91.7 s** (native selftest) vs 172–299 s for this app;
+  **89 MB idle** vs 377 MB. Classifications match v1 where they overlap.
+- **A Tauri shell existed and was deleted.** It worked, but it duplicated the native window for
+  316 MB of WebView2. Don't re-add a webview front end without a platform reason (macOS/Linux).
 
 Rules for working across the two:
 
