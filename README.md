@@ -1,4 +1,6 @@
-# Drive Size Audit
+# opendump
+
+<img src="build/icon.png" alt="" width="84" align="right" />
 
 A local, read-first disk audit tool for Windows. It maps an entire drive, classifies every
 folder by how safe it is to remove, and puts the decision in front of you — one row, one
@@ -42,7 +44,7 @@ npm start          # or: npm run dev  (hot reload)
 ```
 
 On first launch, click **Scan drive**. The scan is a one-time cost; results are cached in
-`%APPDATA%\Drive Size Audit\scan-cache.json`, so every later open is instant.
+`%APPDATA%\opendump\scan-cache.json`, so every later open is instant.
 
 ## Commands
 
@@ -77,7 +79,7 @@ Review → tick folders → Quarantine selected → [review the plan] → confir
 ```
 
 1. Every batch appends a `begin` record listing exactly what is about to move.
-2. Each folder is renamed into `%APPDATA%\Drive Size Audit\quarantine\<batch>\<drive>\<full path>`.
+2. Each folder is renamed into `%APPDATA%\opendump\quarantine\<batch>\<drive>\<full path>`.
    A rename on the same volume is instant and needs no free space — which matters on a
    drive that is already full.
 3. Each result appends a `quarantine` record. A crash mid-batch leaves `interrupted`

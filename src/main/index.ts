@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { join, parse, dirname } from 'node:path'
-import { promises as fs } from 'node:fs'
+import { join, parse, dirname, resolve } from 'node:path'
+import { existsSync, mkdirSync, copyFileSync, cpSync, promises as fs } from 'node:fs'
 import { scanDrive, saveScan, loadScan, driveSpace } from '@shared/scanner'
 import { compileRules, findCandidates, setPathOverrides } from '@shared/rules'
 import { quarantine, listQuarantine, purge, restore, inspectStaged } from '@shared/executor'
@@ -19,10 +19,14 @@ const CACHE_OVERRIDE = process.env.DSA_CACHE
 
 // Pin the user-data location so the cache path is predictable regardless of
 // how Electron resolves the package name.
-app.setName('Drive Size Audit')
+app.setName('opendump')
 
 // Portable profile: lets a run use an isolated cache/journal/quarantine root.
-if (process.env.DSA_USERDATA) app.setPath('userData', process.env.DSA_USERDATA)
+if (process.env.DSA_USERDATA) {
+  app.setPath('userData', process.env.DSA_USERDATA)
+} else {
+  migrateLegacyProfile()
+}
 
 let mainWindow: BrowserWindow | null = null
 let cachedScan: ScanResult | null = null
@@ -31,6 +35,42 @@ let scanning = false
 const cachePath = (): string => CACHE_OVERRIDE ?? join(app.getPath('userData'), 'scan-cache.json')
 const defaultQuarantineRoot = (): string => join(app.getPath('userData'), 'quarantine')
 const journalPath = (): string => join(app.getPath('userData'), 'journal.jsonl')
+
+/**
+ * One-time carry-over from the previous product name.
+ *
+ * Renaming the app moves `app.getPath('userData')`, which would otherwise orphan
+ * the scan cache and the execution journal. Copy rather than move: a partial
+ * migration must never be able to lose someone's journal.
+ */
+function migrateLegacyProfile(): void {
+  const appData = process.env.APPDATA
+  if (!appData) return
+
+  const legacyDir = join(appData, 'Drive Size Audit')
+  if (!existsSync(legacyDir)) return
+
+  const current = app.getPath('userData')
+  if (resolve(current).toLowerCase() === resolve(legacyDir).toLowerCase()) return
+
+  const alreadyHasData =
+    existsSync(join(current, 'scan-cache.json')) || existsSync(join(current, 'journal.jsonl'))
+  if (alreadyHasData) return
+
+  try {
+    mkdirSync(current, { recursive: true })
+    for (const name of ['scan-cache.json', 'journal.jsonl']) {
+      const from = join(legacyDir, name)
+      if (existsSync(from)) copyFileSync(from, join(current, name))
+    }
+    const legacyQuarantine = join(legacyDir, 'quarantine')
+    if (existsSync(legacyQuarantine)) {
+      cpSync(legacyQuarantine, join(current, 'quarantine'), { recursive: true })
+    }
+  } catch {
+    // A failed carry-over leaves the app on a fresh profile; it must not crash startup.
+  }
+}
 
 /**
  * Staging must live on the same volume as the item, because a move is a rename.
@@ -186,7 +226,7 @@ function createWindow(): void {
     minHeight: 680,
     show: false,
     backgroundColor: '#080b10',
-    title: 'Drive Size Audit',
+    title: 'opendump',
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

@@ -1,7 +1,7 @@
 {
-  "name": "drive-size-audit",
-  "productName": "Drive Size Audit",
-  "version": "0.1.0",
+  "name": "opendump",
+  "productName": "opendump",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "author": "Tristan",

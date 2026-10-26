@@ -3,7 +3,7 @@ import { listQuarantine, restore } from '../src/shared/executor'
 
 // Resolve the app's user-data journal from the environment rather than a
 // hardcoded profile. Pass a path explicitly to inspect a portable profile.
-const defaultJournal = join(process.env.APPDATA ?? '', 'Drive Size Audit', 'journal.jsonl')
+const defaultJournal = join(process.env.APPDATA ?? '', 'opendump', 'journal.jsonl')
 
 async function main(): Promise<void> {
   const journalPath = process.argv[2] ?? defaultJournal

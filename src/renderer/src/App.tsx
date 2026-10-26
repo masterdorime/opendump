@@ -227,7 +227,7 @@ export default function App(): React.JSX.Element {
   if (loading) {
     return (
       <div className="boot">
-        <div className="boot-mark">Drive Size Audit</div>
+        <div className="boot-mark">opendump</div>
         <div className="boot-sub">Reading cache…</div>
       </div>
     )
@@ -237,9 +237,9 @@ export default function App(): React.JSX.Element {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">ds</div>
+          <div className="brand-mark">od</div>
           <div className="brand-text">
-            <h1>Drive Size Audit</h1>
+            <h1>opendump</h1>
             <p>
               {state?.meta
                 ? `${state.meta.root.replace(/\\$/, '')} · ${fmtBytes(state.meta.totalBytes)} across ${fmtCount(
