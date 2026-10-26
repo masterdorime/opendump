@@ -20,6 +20,8 @@ nothing actionable.
 - **Maps** the result as a treemap coloured by risk tier, drill-down on click.
 - **Classifies** every folder above 1 MB against a readable rule set.
 - **Explains** every candidate: category, why it is safe (or not), and what breaks if removed.
+- **Asks a local model about the leftovers** — folders no rule could classify, if you have Ollama
+  and the memory to run it. Optional, and it can never authorise a deletion.
 - **Quarantines** approved folders by same-volume rename — instant, restorable.
 - **Purges** on a second, explicit confirmation. This is the step that frees space.
 
@@ -188,21 +190,46 @@ file rather than being split by topic. See [CONTRIBUTING.md](CONTRIBUTING.md).
 Add a rule, run `npm run scan -- 'C:\' --cached`, and the new classification appears in
 under a second.
 
+## Local AI (optional)
+
+Rules handle what is knowable. Local AI handles the folders no rule could explain — *"what **is**
+this 3 GB directory?"*
+
+It runs entirely on your machine through [Ollama](https://ollama.com). No account, no API key,
+no network calls.
+
+**What it needs:** about 1.5 GB of free RAM while it runs, plus a GPU with room for the model (or
+enough RAM to fall back to the CPU). The app measures both, ranks the models for your machine,
+and refuses to start one that would thrash it.
+
+| Model | Download | Comfortable on |
+| --- | --- | --- |
+| Qwen 3.5 0.8B | 1.2 GB | almost anything |
+| Qwen 3.5 2B | 1.9 GB | 4 GB+ VRAM |
+| Qwen 3.5 4B | 3.3 GB | 6 GB+ VRAM — the default |
+| Qwen 3.5 9B | 6.6 GB | 10 GB+ VRAM |
+
+Measured on a 2023 laptop (RTX 4060 8 GB, 11.7 GB RAM, 2.4 GB free): **95 unknown folders in
+2m 58s** — about 1.9 s each — and the model unloads itself the moment the run finishes, leaving
+no VRAM and no RAM held.
+
+If the panel says *won't fit*, close a browser tab and press **Check again**. It is measuring,
+not guessing: the same machine refused the 4B model an hour earlier at 0.7 GB free.
+
+**The ceiling still holds.** The AI can only answer **Review** or **Keep**; it can never authorise
+a deletion. Anything else it emits is coerced down before it reaches the screen.
+
 ## Roadmap
 
 - **Inspection layer** — read the contents of a candidate folder (extension mix, largest files,
   hash-named vs human-named) so a verdict rests on evidence, not on the folder's name. This is
   the highest-value next step: it is what would have caught the `CapCut\Cache` case before a
-  rule was written wrong.
-- **AI layer** — the provider code is written and tested (`src/shared/ai/*`, 18 tests) but not
-  wired to the UI. Design constraint already enforced in code: **the AI's maximum verdict is
-  `REVIEW`. Only a deterministic rule may say `SAFE_PURGE`**, so a wrong model opinion can never
-  put a file on the delete pile.
+  rule was written wrong, and it would make the AI's reasons far sharper.
 - **Elevated tier** — `hiberfil.sys`, Windows Update cache, DISM component cleanup, behind a
   separate UAC-gated helper that re-validates every path itself.
 - **Duplicates and verification reporting.**
-- **Packaging polish** — code signing, an auto-update channel, and an application icon
-  (the default Electron icon is used today).
+- **Packaging polish** — code signing and an auto-update channel. The application icon shipped in
+  v0.2.0; the binaries are still unsigned, so SmartScreen warns.
 - **Chat over the index** — ask questions about the scan with read-only tools, not a general
   assistant.
 
@@ -247,7 +274,8 @@ touch a real scan target. Run them with `npm test`.
 - **Quarantine lives under `%APPDATA%`.** Deleting that folder, or uninstalling, loses anything
   still staged.
 - **A folder in use is skipped, never force-closed.** Close the owning app and retry.
-- **AI is not wired to the UI.** The provider code exists and is tested; there is no button yet.
+- **Local AI needs Ollama installed separately** and roughly 1.5 GB of free RAM while it runs.
+  It is optional — rules, scanning, quarantine and purge all work without it.
 
 ## Privacy
 
