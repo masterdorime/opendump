@@ -195,8 +195,15 @@ under a second.
 Rules handle what is knowable. Local AI handles the folders no rule could explain — *"what **is**
 this 3 GB directory?"*
 
+Open it from the **Local AI** button in the toolbar; the number beside it is how many folders no
+rule could explain — 95 on the machine this was measured on.
+
 It runs entirely on your machine through [Ollama](https://ollama.com). No account, no API key,
-no network calls.
+no network calls. What the model receives is a folder's path, size, file count, last-modified
+date and the rule category that matched it — never the folder's contents, and never the names of
+the files inside it. The same panel can be pointed at an OpenAI-compatible cloud endpoint
+instead; that path stays off until you configure one, and [Privacy](#privacy) below spells out
+exactly what it would send.
 
 **What it needs:** about 1.5 GB of free RAM while it runs, plus a GPU with room for the model (or
 enough RAM to fall back to the CPU). The app measures both, ranks the models for your machine,
@@ -280,9 +287,13 @@ touch a real scan target. Run them with `npm test`.
 ## Privacy
 
 No telemetry, no analytics, no network calls during scanning or cleanup. The app reads file
-names and sizes to compute totals — it does not read file contents. An optional local or cloud
-model provider exists in `src/shared/ai/`, but it is not reachable from the UI in this version;
-if you wire it up yourself, nothing is sent anywhere until you configure a provider.
+names and sizes to compute totals — it does not read file contents.
+
+The **Local AI** panel talks to Ollama on your own machine, so nothing leaves the computer. If
+you configure the optional cloud provider instead, each folder it is asked about is sent as its
+full path, size, file count, last-modified date and matched category. Folder contents are never
+read or sent, and nothing is transmitted at all until you supply an endpoint and a key. In
+hybrid mode only the folders the local model was unsure about are escalated.
 
 ## Contributing
 
