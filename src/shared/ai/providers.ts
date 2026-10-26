@@ -226,11 +226,19 @@ export async function classifyHybrid(
   local: Classifier,
   cloud: Classifier | null,
   threshold = 0.7,
-  onProgress?: (stage: string, done: number, total: number) => void
+  onProgress?: (stage: string, done: number, total: number) => void,
+  batchSize = 12
 ): Promise<HybridResult> {
-  onProgress?.('local model', 0, items.length)
-  const localVerdicts = await local.classify(items)
-  onProgress?.('local model', items.length, items.length)
+  const localVerdicts: AiVerdict[] = []
+
+  // Batched rather than one giant request: a single call gives the UI nothing to
+  // show for minutes, and one slow folder would hold up the whole run.
+  onProgress?.('local', 0, items.length)
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    localVerdicts.push(...(await local.classify(batch)))
+    onProgress?.('local', Math.min(i + batchSize, items.length), items.length)
+  }
 
   if (!cloud) return { verdicts: localVerdicts, localCount: localVerdicts.length, escalatedCount: 0 }
 

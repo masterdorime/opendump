@@ -3,6 +3,8 @@ import type { AppState } from '@shared/types'
 import type { AiStatus } from '@shared/ai/status'
 import type { PullProgress } from '@shared/ai/pull'
 import type { AiSettings } from '@shared/ai/settings'
+import type { SystemStats } from '@shared/system'
+import { memoryPressure, RAM_HEADROOM_BYTES } from '@shared/system'
 import { fmtBytes, fmtCount } from '../lib/format'
 
 interface Props {
@@ -18,13 +20,20 @@ const FIT_LABEL: Record<string, string> = {
   'wont-fit': "Won't fit"
 }
 
+const STAGE_LABEL: Record<string, string> = {
+  local: 'Classifying on this machine',
+  'cloud review': 'Checking uncertain folders with cloud',
+  starting: 'Starting'
+}
+
 export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.Element {
   const [status, setStatus] = useState<AiStatus | null>(null)
   const [settings, setSettings] = useState<AiSettings | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [pull, setPull] = useState<(PullProgress & { model: string }) | null>(null)
   const [busy, setBusy] = useState(false)
-  const [stage, setStage] = useState<string | null>(null)
+  const [live, setLive] = useState<SystemStats | null>(null)
+  const [progress, setProgress] = useState<{ stage: string; done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [other, setOther] = useState('')
 
@@ -38,8 +47,24 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
     void refresh()
   }, [refresh])
 
+  // Live memory while the panel is open: the whole point is watching the number
+  // move as apps are closed, instead of reopening the panel to check.
+  useEffect(() => {
+    let alive = true
+    const tick = async (): Promise<void> => {
+      const stats = await window.dsa.systemStats()
+      if (alive) setLive(stats)
+    }
+    void tick()
+    const id = setInterval(() => void tick(), 2000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [])
+
   useEffect(() => window.dsa.onPullProgress((p) => setPull(p)), [])
-  useEffect(() => window.dsa.onAiProgress((p) => setStage(`${p.stage} ${p.done}/${p.total}`)), [])
+  useEffect(() => window.dsa.onAiProgress((p) => setProgress(p)), [])
 
   const persist = useCallback(async (next: AiSettings, key?: string) => {
     setSettings(next)
@@ -68,7 +93,7 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
   const run = async (): Promise<void> => {
     setBusy(true)
     setError(null)
-    setStage('starting')
+    setProgress({ stage: 'starting', done: 0, total: unclassified })
     try {
       const result = await window.dsa.aiRun()
       onApplied(result.state)
@@ -77,7 +102,7 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
       setError((err as Error).message)
     } finally {
       setBusy(false)
-      setStage(null)
+      setProgress(null)
     }
   }
 
@@ -91,13 +116,28 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
               Close
             </button>
           </div>
-          <p className="modal-sub">Reading hardware and installed models…</p>
+          <div className="ai-loading">
+            <span className="spinner" aria-hidden="true" />
+            <span>Reading hardware and installed models…</span>
+          </div>
         </div>
       </div>
     )
   }
 
   const hw = status.hardware
+  const mem = {
+    gpuName: live?.gpuName ?? hw.gpuName,
+    ramFreeBytes: live?.ramFreeBytes ?? hw.ramFreeBytes,
+    ramTotalBytes: live?.ramTotalBytes ?? hw.ramTotalBytes,
+    vramFreeBytes: live ? live.vramFreeBytes : hw.vramFreeBytes,
+    vramTotalBytes: live ? live.vramTotalBytes : hw.vramTotalBytes
+  }
+  const ramUsedPct = ((mem.ramTotalBytes - mem.ramFreeBytes) / mem.ramTotalBytes) * 100
+  const vramUsedPct = mem.vramTotalBytes
+    ? ((mem.vramTotalBytes - (mem.vramFreeBytes ?? 0)) / mem.vramTotalBytes) * 100
+    : 0
+  const pressure = memoryPressure(mem.ramFreeBytes)
   const selectedInstalled = status.installed.some(
     (m) => m.name === settings.localModel || m.name === `${settings.localModel}:latest`
   )
@@ -118,26 +158,40 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
 
         <div className="ai-body">
           <section className="ai-hw">
-            <div>
+            <div className="ai-hw-gpu">
               <span className="stat-k">GPU</span>
-              <span className="stat-v ai-small">
-                {hw.gpuName ?? 'Not detected — CPU only'}
-              </span>
+              <span className="stat-v ai-small">{mem.gpuName ?? 'Not detected — CPU only'}</span>
             </div>
-            <div>
-              <span className="stat-k">VRAM free</span>
-              <span className="stat-v ai-small">
-                {hw.vramFreeBytes === null
-                  ? 'unknown'
-                  : `${fmtBytes(hw.vramFreeBytes)} of ${fmtBytes(hw.vramTotalBytes ?? 0)}`}
-              </span>
+
+            <div className="ai-meter">
+              <div className="ai-meter-head">
+                <span className="stat-k">RAM</span>
+                <span className="mono ai-small">
+                  {fmtBytes(mem.ramFreeBytes)} free of {fmtBytes(mem.ramTotalBytes)}
+                </span>
+              </div>
+              <div className={`ai-meter-bar p-${pressure}`}>
+                <i style={{ width: `${Math.min(100, Math.max(0, ramUsedPct))}%` }} />
+              </div>
+              <div className="ai-meter-foot">
+                AI needs {fmtBytes(RAM_HEADROOM_BYTES)} free on top of the model
+              </div>
             </div>
-            <div>
-              <span className="stat-k">RAM free</span>
-              <span className="stat-v ai-small">
-                {fmtBytes(hw.ramFreeBytes)} of {fmtBytes(hw.ramTotalBytes)}
-              </span>
-            </div>
+
+            {mem.vramTotalBytes !== null && (
+              <div className="ai-meter">
+                <div className="ai-meter-head">
+                  <span className="stat-k">VRAM</span>
+                  <span className="mono ai-small">
+                    {fmtBytes(mem.vramFreeBytes ?? 0)} free of {fmtBytes(mem.vramTotalBytes)}
+                  </span>
+                </div>
+                <div className="ai-meter-bar p-ok">
+                  <i style={{ width: `${Math.min(100, Math.max(0, vramUsedPct))}%` }} />
+                </div>
+                <div className="ai-meter-foot">Live, updating every 2 seconds</div>
+              </div>
+            )}
           </section>
 
           {!status.ollamaReachable && (
@@ -161,7 +215,7 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
           {status.ollamaReachable && status.recommendations.every((r) => r.fit === 'wont-fit') && (
             <div className="ai-warn">
               <strong>Not enough free memory right now.</strong> The model runner needs about
-              1.5 GB of RAM on top of the model itself, and {fmtBytes(hw.ramFreeBytes)} is free.
+              1.5 GB of RAM on top of the model itself, and {fmtBytes(mem.ramFreeBytes)} is free.
               Close some apps, then check again — nothing here will run until there is room.
               <div className="ai-warn-actions">
                 <button className="btn tiny ghost" onClick={() => void refresh()}>
@@ -200,7 +254,7 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
                           <i style={{ width: `${pct}%` }} />
                         </div>
                         <span className="mono">
-                          {pull.status} {pull.total > 0 ? `· ${pct.toFixed(0)}%` : ''}
+                          {pull.status} {pull.total > 0 ? `Â· ${pct.toFixed(0)}%` : ''}
                         </span>
                       </div>
                     )}
@@ -308,6 +362,24 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
           {error && <div className="ai-error">{error}</div>}
         </div>
 
+        {progress && (
+          <div className="ai-runbar">
+            <div className="ai-runbar-head">
+              <span>{STAGE_LABEL[progress.stage] ?? progress.stage}…</span>
+              <span className="mono">
+                {fmtCount(progress.done)} / {fmtCount(progress.total)}
+              </span>
+            </div>
+            <div className="ai-progress-bar big">
+              <i
+                style={{
+                  width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="modal-foot">
           <span className="muted">
             {unclassified > 0
@@ -323,7 +395,7 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
               disabled={busy || unclassified === 0 || !canRun}
               onClick={() => void run()}
             >
-              {busy ? stage ?? 'Classifying…' : `Classify ${fmtCount(unclassified)} folders`}
+              {busy ? 'Working…' : `Classify ${fmtCount(unclassified)} folders`}
             </button>
           </div>
         </div>

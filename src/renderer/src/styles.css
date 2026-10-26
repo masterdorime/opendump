@@ -1317,6 +1317,201 @@ button {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+/* ---------- live memory + progress ---------- */
+.ram-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.ram-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--safe);
+  flex: 0 0 auto;
+}
+.ram-chip.p-tight i {
+  background: var(--review);
+}
+.ram-chip.p-low i {
+  background: var(--locked);
+}
+
+.scanbar {
+  position: relative;
+}
+.scan-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+}
+.scan-track i {
+  display: block;
+  height: 100%;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: scanSweep 1.5s linear infinite;
+}
+@keyframes scanSweep {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(330%);
+  }
+}
+
+.ai-hw {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.ai-hw-gpu {
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+.ai-meter {
+  flex: 1 1 240px;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ai-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.ai-meter-bar {
+  height: 6px;
+  background: #16202c;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ai-meter-bar i {
+  display: block;
+  height: 100%;
+  transition: width 450ms ease;
+}
+.ai-meter-bar.p-ok i {
+  background: linear-gradient(90deg, #22c55e, #34d399);
+}
+.ai-meter-bar.p-tight i {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+.ai-meter-bar.p-low i {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+.ai-meter-foot {
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.ai-runbar {
+  padding: 12px 18px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+.ai-runbar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+.ai-progress-bar.big {
+  height: 8px;
+}
+
+/* ---------- tutorial ---------- */
+.tutorial {
+  width: min(620px, calc(100vw - 80px));
+}
+.tutorial-body {
+  padding: 26px 26px 20px;
+}
+.tutorial-count {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 10px;
+}
+.tutorial-body h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.tutorial-body p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.tutorial-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--accent);
+  background: rgba(56, 189, 248, 0.06);
+  border-radius: 0 6px 6px 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.tutorial-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 22px;
+}
+.tutorial-dots span {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: #1e2a3a;
+}
+.tutorial-dots span.on {
+  background: var(--accent);
+}
+.btn.help {
+  width: 30px;
+  padding: 6px 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 26px 18px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid #24354a;
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

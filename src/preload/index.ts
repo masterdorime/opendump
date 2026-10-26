@@ -3,6 +3,7 @@ import type { ScanProgress } from '@shared/types'
 import type { BatchResult, ExecItem, QuarantineItem, StagedDetail } from '@shared/executor'
 import type { AiSettings } from '@shared/ai/settings'
 import type { PullProgress } from '@shared/ai/pull'
+import type { SystemStats, UiState } from '@shared/system'
 
 const api = {
   getState: () => ipcRenderer.invoke('state:get'),
@@ -21,6 +22,9 @@ const api = {
     ipcRenderer.invoke('ai:settings:save', settings, apiKey),
   aiPull: (model: string): Promise<boolean> => ipcRenderer.invoke('ai:pull', model),
   aiRun: () => ipcRenderer.invoke('ai:run'),
+  systemStats: (): Promise<SystemStats> => ipcRenderer.invoke('system:stats'),
+  uiStateGet: (): Promise<UiState> => ipcRenderer.invoke('ui:state:get'),
+  uiStateSet: (patch: Partial<UiState>): Promise<UiState> => ipcRenderer.invoke('ui:state:set', patch),
   onPullProgress: (cb: (p: PullProgress & { model: string }) => void): (() => void) => {
     const listener = (_e: unknown, payload: PullProgress & { model: string }): void => cb(payload)
     ipcRenderer.on('ai:pull', listener)

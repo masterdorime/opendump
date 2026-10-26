@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, safeStorage } from 'electron'
 import { join, parse, dirname, resolve } from 'node:path'
 import { existsSync, mkdirSync, copyFileSync, cpSync, promises as fs } from 'node:fs'
+import * as os from 'node:os'
 import { scanDrive, saveScan, loadScan, driveSpace } from '@shared/scanner'
 import { compileRules, findCandidates, findUnclassified, setPathOverrides } from '@shared/rules'
 import { quarantine, listQuarantine, purge, restore, inspectStaged } from '@shared/executor'
@@ -47,6 +48,27 @@ const defaultQuarantineRoot = (): string => join(app.getPath('userData'), 'quara
 const journalPath = (): string => join(app.getPath('userData'), 'journal.jsonl')
 const aiSettingsPath = (): string => join(app.getPath('userData'), 'ai-settings.json')
 const aiKeyPath = (): string => join(app.getPath('userData'), 'ai-key.bin')
+const uiStatePath = (): string => join(app.getPath('userData'), 'ui-state.json')
+
+let gpuCache = {
+  at: 0,
+  name: null as string | null,
+  freeBytes: null as number | null,
+  totalBytes: null as number | null
+}
+
+/** nvidia-smi costs ~300 ms, too much for a 2 s poll, so cache it briefly. */
+async function gpuSnapshot(): Promise<typeof gpuCache> {
+  if (Date.now() - gpuCache.at < 5000) return gpuCache
+  const hardware = await readHardware()
+  gpuCache = {
+    at: Date.now(),
+    name: hardware.gpuName,
+    freeBytes: hardware.vramFreeBytes,
+    totalBytes: hardware.vramTotalBytes
+  }
+  return gpuCache
+}
 
 async function loadAiSettings(): Promise<AiSettings> {
   try {
@@ -524,18 +546,17 @@ async function pullModel(model: string, onProgress: (p: PullProgress) => void): 
 }
 
 ipcMain.handle('ai:status', async () => {
-  const hardware = await readHardware()
+  // Hardware probing and the Ollama check are independent; running them in
+  // series made the panel sit on its loading state for several seconds.
+  const [hardware, probe] = await Promise.all([
+    readHardware(),
+    ollamaModels()
+      .then((models) => ({ reachable: true, models }))
+      .catch(() => ({ reachable: false, models: [] as Array<{ name: string; sizeBytes: number }> }))
+  ])
+
   const settings = await loadAiSettings()
-
-  let installed: Array<{ name: string; sizeBytes: number }> = []
-  let ollamaReachable = false
-  try {
-    installed = await ollamaModels()
-    ollamaReachable = true
-  } catch {
-    ollamaReachable = false
-  }
-
+  const installed = probe.models
   const installedNames = new Set(installed.map((m) => m.name))
   const recommendations = recommendModels(hardware).map((r) => ({
     ...r,
@@ -544,7 +565,7 @@ ipcMain.handle('ai:status', async () => {
 
   return {
     hardware,
-    ollamaReachable,
+    ollamaReachable: probe.reachable,
     installed,
     recommendations,
     catalogue: CATALOGUE,
@@ -558,6 +579,34 @@ ipcMain.handle('ai:settings:save', async (_e, settings: unknown, apiKey?: string
   const merged = mergeSettings(settings)
   await saveAiSettings(merged, apiKey)
   return merged
+})
+
+ipcMain.handle('system:stats', async () => {
+  const gpu = await gpuSnapshot()
+  return {
+    ramTotalBytes: os.totalmem(),
+    ramFreeBytes: os.freemem(),
+    gpuName: gpu.name,
+    vramFreeBytes: gpu.freeBytes,
+    vramTotalBytes: gpu.totalBytes
+  }
+})
+
+ipcMain.handle('ui:state:get', async () => {
+  try {
+    const raw = await fs.readFile(uiStatePath(), 'utf8')
+    const parsed = JSON.parse(raw) as { tutorialSeen?: unknown }
+    return { tutorialSeen: parsed.tutorialSeen === true }
+  } catch {
+    return { tutorialSeen: false }
+  }
+})
+
+ipcMain.handle('ui:state:set', async (_e, patch: { tutorialSeen?: boolean }) => {
+  const next = { tutorialSeen: patch?.tutorialSeen === true }
+  await fs.mkdir(dirname(uiStatePath()), { recursive: true })
+  await fs.writeFile(uiStatePath(), JSON.stringify(next, null, 2), 'utf8')
+  return next
 })
 
 ipcMain.handle('ai:pull', async (_e, model: string) => {

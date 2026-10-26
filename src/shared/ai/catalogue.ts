@@ -94,7 +94,7 @@ export function checkRunFeasible(
   if (hardware.ramFreeBytes < RUNNER_RAM_BYTES) {
     return `Only ${(hardware.ramFreeBytes / GiB).toFixed(
       1
-    )} GB of RAM is free. The model runner needs about 1.5 GB on top of the model â€” close some apps and try again.`
+    )} GB of RAM is free. The model runner needs about 1.5 GB on top of the model — close some apps and try again.`
   }
 
   if (hardware.vramFreeBytes !== null) {
@@ -139,7 +139,7 @@ export function recommendModels(
       return {
         spec,
         fit: 'wont-fit' as const,
-        detail: `Only ${gb(hardware.ramFreeBytes)} RAM is free â€” the model runner needs about ${gb(
+        detail: `Only ${gb(hardware.ramFreeBytes)} RAM is free — the model runner needs about ${gb(
           RUNNER_RAM_BYTES
         )}. Close some apps and re-check.`
       }
@@ -159,7 +159,7 @@ export function recommendModels(
           fit: 'tight' as const,
           detail: `Needs ${gb(neededVram)} of VRAM and ${gb(
             hardware.vramFreeBytes
-          )} is free â€” it may spill to RAM and slow down.`
+          )} is free — it may spill to RAM and slow down.`
         }
       }
     }

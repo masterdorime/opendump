@@ -5,6 +5,9 @@ import { Treemap } from './components/Treemap'
 import { PlanModal } from './components/PlanModal'
 import { QuarantineView } from './components/QuarantineView'
 import { AiPanel } from './components/AiPanel'
+import { TutorialModal } from './components/TutorialModal'
+import type { SystemStats } from '@shared/system'
+import { memoryPressure } from '@shared/system'
 import { baseName, fmtBytes, fmtCount, fmtRelative, prettyPath } from './lib/format'
 
 const TIER_LABEL: Record<Tier, string> = {
@@ -69,6 +72,8 @@ export default function App(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<BatchResult | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
+  const [stats, setStats] = useState<SystemStats | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -87,6 +92,27 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     return window.dsa.onProgress((p) => setProgress(p))
+  }, [])
+
+  // First run: show the guide once. Afterwards it lives behind the “?” button.
+  useEffect(() => {
+    void window.dsa.uiStateGet().then((s) => {
+      if (!s.tutorialSeen) setTutorialOpen(true)
+    })
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    const tick = async (): Promise<void> => {
+      const next = await window.dsa.systemStats()
+      if (alive) setStats(next)
+    }
+    void tick()
+    const id = setInterval(() => void tick(), 4000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
   }, [])
 
   const refreshQuarantine = useCallback(async () => {
@@ -275,11 +301,27 @@ export default function App(): React.JSX.Element {
               <div className="meter" title={`${usedPct.toFixed(1)}% used`}>
                 <i style={{ width: `${usedPct}%` }} />
               </div>
+              {stats && (
+                <div
+                  className={`ram-chip p-${memoryPressure(stats.ramFreeBytes)}`}
+                  title="Free system RAM. Local AI needs about 1.5 GB of headroom."
+                >
+                  <i />
+                  {fmtBytes(stats.ramFreeBytes)} RAM free
+                </div>
+              )}
             </>
           )}
         </div>
 
         <div className="actions">
+          <button
+            className="btn ghost help"
+            onClick={() => setTutorialOpen(true)}
+            title="How opendump works"
+          >
+            ?
+          </button>
           <button className="btn ghost" onClick={() => window.dsa.openRules()} title="Open rules.json">
             Rules
           </button>
@@ -303,6 +345,9 @@ export default function App(): React.JSX.Element {
             </span>
           </div>
           <div className="scanbar-path">{progress?.current ?? ''}</div>
+          <div className="scan-track" aria-hidden="true">
+            <i />
+          </div>
         </div>
       )}
 
@@ -568,6 +613,15 @@ export default function App(): React.JSX.Element {
           onApplied={(next) => {
             setState(next)
             setPicked(new Set())
+          }}
+        />
+      )}
+
+      {tutorialOpen && (
+        <TutorialModal
+          onFinish={() => {
+            setTutorialOpen(false)
+            void window.dsa.uiStateSet({ tutorialSeen: true })
           }}
         />
       )}

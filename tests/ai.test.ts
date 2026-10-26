@@ -33,7 +33,7 @@ describe('parseVerdicts', () => {
 
   /**
    * The single most important test in this file. A model that decides a folder
-   * is definitely deletable must not be able to say so â€” the ceiling is REVIEW.
+   * is definitely deletable must not be able to say so — the ceiling is REVIEW.
    */
   it('downgrades a model that tries to authorise deletion', () => {
     const out = parseVerdicts(
@@ -240,6 +240,40 @@ describe('classifyHybrid', () => {
     await classifyHybrid(ITEMS, local, cloud)
 
     expect(sent[0]).toEqual(['C:\\b\\mystery', 'C:\\c\\stuff'])
+  })
+
+  it('batches the local work so progress is real, not a jump from 0 to 100', async () => {
+    const many: ClassifyItem[] = Array.from({ length: 25 }, (_, i) => ({
+      path: `C:\\item\\${i}`,
+      size: 1024,
+      files: 1,
+      mtime: 0,
+      category: 'unclassified'
+    }))
+
+    const batches: number[] = []
+    const local: Classifier = {
+      id: 'local',
+      model: 'fake-local',
+      classify: async (items) => {
+        batches.push(items.length)
+        return items.map((i) => ({
+          path: i.path,
+          tier: 'KEEP' as const,
+          reason: 'x',
+          confidence: 0.95
+        }))
+      }
+    }
+
+    const progress: Array<{ stage: string; done: number; total: number }> = []
+    await classifyHybrid(many, local, null, 0.7, (stage, done, total) => {
+      progress.push({ stage, done, total })
+    })
+
+    expect(batches).toEqual([12, 12, 1])
+    expect(progress.at(-1)).toEqual({ stage: 'local', done: 25, total: 25 })
+    expect(progress.length).toBeGreaterThan(3)
   })
 })
 
