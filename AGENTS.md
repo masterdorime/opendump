@@ -367,11 +367,14 @@ installer + portable build, CI, releases.
 
 ### V2 (Rust) — a sibling repo, not a replacement
 
-`https://github.com/masterdorime/opendump-v2` — pre-alpha Rust core.
+`https://github.com/masterdorime/opendump-v2` — pre-alpha Rust core + CLI, 24 tests.
 
-- **Ported:** rule engine, token expansion, types. 10 tests mirroring the invariants below.
-- **Not ported:** scanner, executor, Tauri shell, AI. **Nothing there can delete a file.**
-- It is a deliberate rewrite, not a transliteration. Same four invariants, same expectations.
+- **Ported:** rule engine, scanner, executor (quarantine/restore/purge + journal), CLI.
+- **Not ported:** Tauri shell, AI layer, `find_unclassified`, MFT reader.
+- **Still not an app.** There is no window and no installer. The CLI *can* quarantine and purge,
+  gated behind `--yes` and a rule re-check — so "v2 cannot delete anything" is no longer true.
+- Measured: full `C:\` scan in **102.8 s** vs 172–299 s for this app; binary **1.75 MB** vs
+  366 MB installed. Classifications match v1 where they overlap.
 
 Rules for working across the two:
 
