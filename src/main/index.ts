@@ -12,7 +12,6 @@ import { parsePullLine } from '@shared/ai/pull'
 import type { PullProgress } from '@shared/ai/pull'
 import { mergeSettings, DEFAULT_SETTINGS } from '@shared/ai/settings'
 import type { AiSettings } from '@shared/ai/settings'
-import { canFit } from '@shared/ai/preflight'
 import { classifyHybrid, CloudProvider, OllamaProvider, ollamaModels } from '@shared/ai/providers'
 import type { AiVerdict } from '@shared/ai/verdict'
 import type {
