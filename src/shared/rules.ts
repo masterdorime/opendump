@@ -324,6 +324,114 @@ export function findCandidates(
   return out.sort((a, b) => b.size - a.size)
 }
 
+export interface UnclassifiedDir {
+  path: string
+  size: number
+  files: number
+  mtime: number
+  depth: number
+}
+
+export interface UnclassifiedOptions {
+  minBytes?: number
+  /** Subtrees never worth asking a model about, e.g. C:\Windows. */
+  excludeRoots?: Array<string | undefined>
+}
+
+/**
+ * Folders the rule set has nothing to say about.
+ *
+ * This is the only place a language model adds information: a rule can tell you
+ * `Arduino15` is a re-downloadable toolchain, but it cannot tell you what some
+ * unnamed 3 GB folder is. Re-classifying folders the rules already understand
+ * produced worse reasons than the rules themselves, so we don't.
+ */
+export function findUnclassified(
+  scan: ScanResult,
+  compiled: CompiledRule[],
+  opts: UnclassifiedOptions = {}
+): UnclassifiedDir[] {
+  const minBytes = opts.minBytes ?? 200 * 1024 * 1024
+  const excluded = (opts.excludeRoots ?? [])
+    .filter((r): r is string => typeof r === 'string' && r.length > 0)
+    .map((r) => r.replace(/[\\/]+$/, '').toLowerCase())
+
+  const isExcluded = (p: string): boolean => {
+    const lower = p.toLowerCase()
+    return excluded.some((root) => lower === root || lower.startsWith(root + '\\'))
+  }
+
+  // Only folders already at the size floor can qualify, which keeps this to a
+  // few thousand rule evaluations instead of 375,000.
+  const big = scan.dirs.filter((d) => d.s >= minBytes)
+
+  const childrenOf = new Map<string, string[]>()
+  for (const dir of big) {
+    const parent = parentOf(dir.p)
+    if (!parent) continue
+    const key = parent.toLowerCase()
+    const list = childrenOf.get(key) ?? []
+    list.push(dir.p)
+    childrenOf.set(key, list)
+  }
+
+  const isUnknown = (dir: { p: string; s: number; pkg?: boolean }): boolean => {
+    if (dir.s < minBytes) return false
+    if (isDriveRoot(dir.p)) return false
+    if (isExcluded(dir.p)) return false
+    const rule = matchRule(dir.p, dir.s, compiled, { parentPkg: Boolean(dir.pkg) })
+    // A display-only rule is a colour, not a verdict: those folders are unknown.
+    return !rule || Boolean(rule.display)
+  }
+
+  const verdicts = new Map<string, boolean>()
+  const unknownOf = (dir: { p: string; s: number; pkg?: boolean }): boolean => {
+    const key = dir.p.toLowerCase()
+    const cached = verdicts.get(key)
+    if (cached !== undefined) return cached
+    const value = isUnknown(dir)
+    verdicts.set(key, value)
+    return value
+  }
+
+  const byPath = new Map(big.map((d) => [d.p.toLowerCase(), d]))
+  const out: UnclassifiedDir[] = []
+
+  for (const dir of big) {
+    if (!unknownOf(dir)) continue
+
+    // `C:\Users\you` is technically unknown but useless to ask about: it is a
+    // container, not a thing. Descend until the unknown folder has no unknown
+    // children, so the model sees a concrete directory.
+    const kids = childrenOf.get(dir.p.toLowerCase()) ?? []
+    const hasUnknownChild = kids.some((kid) => {
+      const child = byPath.get(kid.toLowerCase())
+      return child ? unknownOf(child) : false
+    })
+    if (hasUnknownChild) continue
+
+    // If a child is already a classified candidate covering most of this folder,
+    // the child is the thing to act on. Offering the parent would double-count
+    // those bytes (e.g. `.ollama` vs its classified `models` subfolder).
+    let classifiedChildBytes = 0
+    for (const kid of kids) {
+      const child = byPath.get(kid.toLowerCase())
+      if (child && !unknownOf(child)) classifiedChildBytes += child.s
+    }
+    if (classifiedChildBytes >= dir.s * 0.5) continue
+
+    out.push({
+      path: dir.p,
+      size: dir.s,
+      files: dir.c,
+      mtime: dir.m,
+      depth: depthOf(dir.p)
+    })
+  }
+
+  return out.sort((a, b) => b.size - a.size)
+}
+
 export const TIER_ORDER: Record<Tier, number> = {
   SAFE_PURGE: 0,
   REVIEW: 1,

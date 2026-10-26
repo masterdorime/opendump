@@ -1,10 +1,20 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, safeStorage } from 'electron'
 import { join, parse, dirname, resolve } from 'node:path'
 import { existsSync, mkdirSync, copyFileSync, cpSync, promises as fs } from 'node:fs'
 import { scanDrive, saveScan, loadScan, driveSpace } from '@shared/scanner'
-import { compileRules, findCandidates, setPathOverrides } from '@shared/rules'
+import { compileRules, findCandidates, findUnclassified, setPathOverrides } from '@shared/rules'
 import { quarantine, listQuarantine, purge, restore, inspectStaged } from '@shared/executor'
 import type { ExecItem, QuarantineItem, StagedDetail } from '@shared/executor'
+import { readHardware } from '@shared/ai/hardware'
+import { CATALOGUE, recommendModels, pickDefault } from '@shared/ai/catalogue'
+import type { ModelSpec, Recommendation } from '@shared/ai/catalogue'
+import { parsePullLine } from '@shared/ai/pull'
+import type { PullProgress } from '@shared/ai/pull'
+import { mergeSettings, DEFAULT_SETTINGS } from '@shared/ai/settings'
+import type { AiSettings } from '@shared/ai/settings'
+import { canFit } from '@shared/ai/preflight'
+import { classifyHybrid, CloudProvider, OllamaProvider, ollamaModels } from '@shared/ai/providers'
+import type { AiVerdict } from '@shared/ai/verdict'
 import type {
   AppState,
   Rule,
@@ -31,10 +41,46 @@ if (process.env.DSA_USERDATA) {
 let mainWindow: BrowserWindow | null = null
 let cachedScan: ScanResult | null = null
 let scanning = false
+let aiVerdicts = new Map<string, AiVerdict>()
 
 const cachePath = (): string => CACHE_OVERRIDE ?? join(app.getPath('userData'), 'scan-cache.json')
 const defaultQuarantineRoot = (): string => join(app.getPath('userData'), 'quarantine')
 const journalPath = (): string => join(app.getPath('userData'), 'journal.jsonl')
+const aiSettingsPath = (): string => join(app.getPath('userData'), 'ai-settings.json')
+const aiKeyPath = (): string => join(app.getPath('userData'), 'ai-key.bin')
+
+async function loadAiSettings(): Promise<AiSettings> {
+  try {
+    const raw = await fs.readFile(aiSettingsPath(), 'utf8')
+    return mergeSettings(JSON.parse(raw))
+  } catch {
+    return mergeSettings(null)
+  }
+}
+
+async function saveAiSettings(settings: AiSettings, apiKey?: string): Promise<void> {
+  await fs.mkdir(dirname(aiSettingsPath()), { recursive: true })
+  await fs.writeFile(aiSettingsPath(), JSON.stringify(settings, null, 2), 'utf8')
+
+  if (apiKey === undefined) return
+  if (apiKey.length === 0) {
+    await fs.rm(aiKeyPath(), { force: true })
+    return
+  }
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Windows credential encryption is unavailable; the key was not saved')
+  }
+  await fs.writeFile(aiKeyPath(), safeStorage.encryptString(apiKey))
+}
+
+async function readAiKey(): Promise<string | null> {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return null
+    return safeStorage.decryptString(await fs.readFile(aiKeyPath()))
+  } catch {
+    return null
+  }
+}
 
 /**
  * One-time carry-over from the previous product name.
@@ -171,6 +217,17 @@ function buildTree(scan: ScanResult, tiers: Map<string, Tier>): TreeNode {
   return build(scan.root, null)
 }
 
+/** Subtrees the AI should never be asked about: Windows, our own profiles, our own install. */
+function aiExclusionRoots(): Array<string | undefined> {
+  const appData = process.env.APPDATA
+  return [
+    process.env.WINDIR,
+    appData ? join(appData, 'opendump') : undefined,
+    appData ? join(appData, 'Drive Size Audit') : undefined,
+    app.getAppPath()
+  ]
+}
+
 async function buildState(scan: ScanResult): Promise<AppState> {
   const { rules, version } = await loadRules()
   const compiled = compileRules(rules)
@@ -199,6 +256,37 @@ async function buildState(scan: ScanResult): Promise<AppState> {
             )
         )
 
+  // AI verdicts on folders no rule could classify become ordinary review rows,
+  // so they flow through the same selection, quarantine and purge pipeline.
+  if (aiVerdicts.size > 0) {
+    const known = new Set(candidates.map((c) => c.path.toLowerCase()))
+    const byPath = new Map(scan.dirs.map((d) => [d.p.toLowerCase(), d]))
+
+    for (const [key, verdict] of aiVerdicts) {
+      if (known.has(key)) continue
+      if (heldSrcs.some((held) => key === held || key.startsWith(held + '\\'))) continue
+      const dir = byPath.get(key)
+      if (!dir) continue
+
+      candidates.push({
+        path: dir.p,
+        size: dir.s,
+        totalSize: dir.s,
+        files: dir.c,
+        mtime: dir.m,
+        tier: verdict.tier,
+        category: 'AI classification',
+        reason: verdict.reason,
+        ruleId: `ai:${verdict.model ?? 'model'}`,
+        depth: dir.p.split('\\').length - 1,
+        blocked: false,
+        blockedBytes: 0,
+        blockedBy: []
+      })
+    }
+    candidates.sort((a, b) => b.size - a.size)
+  }
+
   return {
     drive: DRIVE,
     meta: {
@@ -214,7 +302,11 @@ async function buildState(scan: ScanResult): Promise<AppState> {
     candidates,
     space,
     rulesVersion: version,
-    quarantinedSrcs: staged.filter((s) => s.status === 'quarantined').map((s) => s.src)
+    quarantinedSrcs: staged.filter((s) => s.status === 'quarantined').map((s) => s.src),
+    unclassified: findUnclassified(scan, compiled, {
+      minBytes: 200 * 1024 * 1024,
+      excludeRoots: aiExclusionRoots()
+    }).length
   }
 }
 
@@ -335,7 +427,8 @@ ipcMain.handle('state:get', async (): Promise<AppState> => {
     candidates: [],
     space: await driveSpace(DRIVE),
     rulesVersion: 0,
-    quarantinedSrcs: []
+    quarantinedSrcs: [],
+    unclassified: 0
   }
 })
 
@@ -351,6 +444,7 @@ ipcMain.handle('scan:run', async (): Promise<AppState> => {
     })
 
     cachedScan = scan
+    aiVerdicts = new Map()
     await saveScan(scan, cachePath())
     return await buildState(scan)
   } finally {
@@ -395,6 +489,158 @@ ipcMain.handle('exec:inspect', async (_e, ids: string[]): Promise<StagedDetail[]
   const wanted = new Set(ids)
   const chosen = all.filter((i) => wanted.has(i.id) && i.status === 'quarantined')
   return inspectStaged(chosen)
+})
+
+async function pullModel(model: string, onProgress: (p: PullProgress) => void): Promise<void> {
+  const response = await fetch('http://127.0.0.1:11434/api/pull', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, stream: true })
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`Ollama refused the download (HTTP ${response.status})`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let index = buffer.indexOf('\n')
+    while (index >= 0) {
+      const line = buffer.slice(0, index)
+      buffer = buffer.slice(index + 1)
+      const progress = parsePullLine(line)
+      if (progress) onProgress(progress)
+      index = buffer.indexOf('\n')
+    }
+  }
+
+  const tail = parsePullLine(buffer)
+  if (tail) onProgress(tail)
+}
+
+ipcMain.handle('ai:status', async () => {
+  const hardware = await readHardware()
+  const settings = await loadAiSettings()
+
+  let installed: Array<{ name: string; sizeBytes: number }> = []
+  let ollamaReachable = false
+  try {
+    installed = await ollamaModels()
+    ollamaReachable = true
+  } catch {
+    ollamaReachable = false
+  }
+
+  const installedNames = new Set(installed.map((m) => m.name))
+  const recommendations = recommendModels(hardware).map((r) => ({
+    ...r,
+    installed: installedNames.has(r.spec.id) || installedNames.has(`${r.spec.id}:latest`)
+  }))
+
+  return {
+    hardware,
+    ollamaReachable,
+    installed,
+    recommendations,
+    catalogue: CATALOGUE,
+    defaultModel: pickDefault(recommendations)?.spec.id ?? null,
+    settings,
+    keyPresent: (await readAiKey()) !== null
+  }
+})
+
+ipcMain.handle('ai:settings:save', async (_e, settings: unknown, apiKey?: string) => {
+  const merged = mergeSettings(settings)
+  await saveAiSettings(merged, apiKey)
+  return merged
+})
+
+ipcMain.handle('ai:pull', async (_e, model: string) => {
+  const name = typeof model === 'string' ? model.trim() : ''
+  if (!name) throw new Error('A model name is required')
+  await pullModel(name, (progress) => {
+    mainWindow?.webContents.send('ai:pull', { model: name, ...progress })
+  })
+  return true
+})
+
+ipcMain.handle('ai:run', async () => {
+  if (!cachedScan) throw new Error('Scan a drive first')
+
+  const settings = await loadAiSettings()
+  const hardware = await readHardware()
+
+  let installed: Array<{ name: string; sizeBytes: number }> = []
+  try {
+    installed = await ollamaModels()
+  } catch {
+    throw new Error('Ollama is not running. Start it, then try again.')
+  }
+
+  const model = installed.find(
+    (m) => m.name === settings.localModel || m.name === `${settings.localModel}:latest`
+  )
+  if (!model) {
+    throw new Error(`${settings.localModel} is not installed yet — download it first.`)
+  }
+
+  const fit = canFit(model.sizeBytes, hardware.vramFreeBytes ?? 0)
+  if (!fit.ok && hardware.vramFreeBytes !== null) throw new Error(fit.reason)
+
+  const { rules } = await loadRules()
+  const compiled = compileRules(rules)
+  const targets = findUnclassified(cachedScan, compiled, {
+    minBytes: 200 * 1024 * 1024,
+    excludeRoots: aiExclusionRoots()
+  }).slice(0, 80)
+
+  if (targets.length === 0) return buildState(cachedScan)
+
+  const items = targets.map((t) => ({
+    path: t.path,
+    size: t.size,
+    files: t.files,
+    mtime: t.mtime,
+    category: 'unclassified'
+  }))
+
+  const local = new OllamaProvider({ model: settings.localModel })
+  let cloud: CloudProvider | null = null
+  if (settings.provider === 'hybrid' && settings.cloud.model) {
+    const key = await readAiKey()
+    if (key) {
+      cloud = new CloudProvider({
+        baseUrl: settings.cloud.baseUrl,
+        apiKey: key,
+        model: settings.cloud.model
+      })
+    }
+  }
+
+  const result = await classifyHybrid(
+    items,
+    local,
+    cloud,
+    settings.confidenceThreshold,
+    (stage, done, total) => mainWindow?.webContents.send('ai:progress', { stage, done, total })
+  )
+
+  for (const verdict of result.verdicts) {
+    aiVerdicts.set(verdict.path.toLowerCase(), verdict)
+  }
+
+  return {
+    state: await buildState(cachedScan),
+    classified: result.verdicts.length,
+    escalated: result.escalatedCount,
+    cloudError: result.cloudError
+  }
 })
 
 app.whenReady().then(() => {

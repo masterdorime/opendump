@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest'
-import { compileRules, findCandidates, matchRule, setPathOverrides } from '../src/shared/rules'
+import { compileRules, findCandidates, findUnclassified, matchRule, setPathOverrides } from '../src/shared/rules'
 import type { Rule, ScanResult } from '../src/shared/types'
 
 const MB = 1024 * 1024
@@ -102,6 +102,44 @@ describe('findCandidates', () => {
   it('never offers a folder smaller than the reporting floor on its own', () => {
     // C:\ contributes 100 MB of unclassified files and matches no rule at all.
     expect(byPath.has('c:\\')).toBe(false)
+  })
+})
+
+describe('findUnclassified', () => {
+  const MB = 1024 * 1024
+  const SCAN = scanTree({
+    'C:\\': 1000 * MB,
+    'C:\\A': 600 * MB,
+    'C:\\A\\cache': 400 * MB,
+    'C:\\mystery': 420 * MB,
+    'C:\\mystery\\inner': 300 * MB,
+    'C:\\solo': 260 * MB
+  })
+
+  it('descends to the most specific unknown folder instead of the container', () => {
+    const found = findUnclassified(SCAN, compileRules(RULES), { minBytes: 100 * MB })
+    const paths = found.map((f) => f.path.toLowerCase())
+    expect(paths).toContain('c:\\mystery\\inner')
+    expect(paths).not.toContain('c:\\mystery')
+  })
+
+  it('emits an unknown folder that has no unknown children', () => {
+    const found = findUnclassified(SCAN, compileRules(RULES), { minBytes: 100 * MB })
+    expect(found.map((f) => f.path.toLowerCase())).toContain('c:\\solo')
+  })
+
+  it('never returns something a rule already classified', () => {
+    const found = findUnclassified(SCAN, compileRules(RULES), { minBytes: 100 * MB })
+    const paths = found.map((f) => f.path.toLowerCase())
+    expect(paths).not.toContain('c:\\a\\cache')
+  })
+
+  it('honours excluded roots such as the Windows directory', () => {
+    const found = findUnclassified(SCAN, compileRules(RULES), {
+      minBytes: 100 * MB,
+      excludeRoots: ['C:\\mystery']
+    })
+    expect(found.map((f) => f.path.toLowerCase())).not.toContain('c:\\mystery\\inner')
   })
 })
 

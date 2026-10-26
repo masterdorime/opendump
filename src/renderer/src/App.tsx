@@ -4,6 +4,7 @@ import type { BatchResult, QuarantineItem } from '@shared/executor'
 import { Treemap } from './components/Treemap'
 import { PlanModal } from './components/PlanModal'
 import { QuarantineView } from './components/QuarantineView'
+import { AiPanel } from './components/AiPanel'
 import { baseName, fmtBytes, fmtCount, fmtRelative, prettyPath } from './lib/format'
 
 const TIER_LABEL: Record<Tier, string> = {
@@ -67,6 +68,7 @@ export default function App(): React.JSX.Element {
   const [quarantineItems, setQuarantineItems] = useState<QuarantineItem[]>([])
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<BatchResult | null>(null)
+  const [aiOpen, setAiOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -453,15 +455,23 @@ export default function App(): React.JSX.Element {
                   </button>
                 ))}
               </div>
-              <button
-                className="btn tiny ghost"
-                onClick={() => {
-                  const safe = candidates.filter((c) => c.tier === 'SAFE_PURGE')
-                  setPicked(new Set(safe.map((c) => c.path)))
-                }}
-              >
-                Select all safe
-              </button>
+              <div className="toolbar-actions">
+                <button className="btn tiny ghost" onClick={() => setAiOpen(true)}>
+                  Local AI
+                  {state && state.unclassified > 0 && (
+                    <span className="pill">{fmtCount(state.unclassified)}</span>
+                  )}
+                </button>
+                <button
+                  className="btn tiny ghost"
+                  onClick={() => {
+                    const safe = candidates.filter((c) => c.tier === 'SAFE_PURGE')
+                    setPicked(new Set(safe.map((c) => c.path)))
+                  }}
+                >
+                  Select all safe
+                </button>
+              </div>
             </div>
 
             <div className="review-list">
@@ -548,6 +558,17 @@ export default function App(): React.JSX.Element {
           busy={busy}
           onClose={() => setPlanOpen(false)}
           onConfirm={doQuarantine}
+        />
+      )}
+
+      {aiOpen && (
+        <AiPanel
+          unclassified={state?.unclassified ?? 0}
+          onClose={() => setAiOpen(false)}
+          onApplied={(next) => {
+            setState(next)
+            setPicked(new Set())
+          }}
         />
       )}
 

@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 import type { AppState, ScanProgress } from '@shared/types'
 import type { BatchResult, ExecItem, QuarantineItem, StagedDetail } from '@shared/executor'
+import type { AiSettings } from '@shared/ai/settings'
+import type { PullProgress } from '@shared/ai/pull'
+import type { AiStatus } from '@shared/ai/status'
 
 declare global {
   interface Window {
@@ -16,6 +19,12 @@ declare global {
       restore(ids: string[]): Promise<BatchResult>
       purge(ids: string[]): Promise<BatchResult>
       inspectQuarantine(ids: string[]): Promise<StagedDetail[]>
+      aiStatus(): Promise<AiStatus>
+      aiSaveSettings(settings: AiSettings, apiKey?: string): Promise<AiSettings>
+      aiPull(model: string): Promise<boolean>
+      aiRun(): Promise<{ state: AppState; classified: number; escalated: number; cloudError?: string }>
+      onPullProgress(cb: (p: PullProgress & { model: string }) => void): () => void
+      onAiProgress(cb: (p: { stage: string; done: number; total: number }) => void): () => void
       onProgress(cb: (p: ScanProgress) => void): () => void
     }
   }

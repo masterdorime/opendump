@@ -125,4 +125,6 @@ export interface AppState {
   rulesVersion: number
   /** Source paths currently held in quarantine — excluded from candidates. */
   quarantinedSrcs: string[]
+  /** Large folders no rule could classify; the only useful target for the AI. */
+  unclassified: number
 }
