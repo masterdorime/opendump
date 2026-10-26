@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { parseVerdicts, needsEscalation, type AiVerdict } from '../src/shared/ai/verdict'
 import { canFit } from '../src/shared/ai/preflight'
 import { buildMessages, classifyHybrid, type Classifier, type ClassifyItem } from '../src/shared/ai/providers'

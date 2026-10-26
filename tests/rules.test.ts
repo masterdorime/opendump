@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { compileRules, findCandidates, findUnclassified, matchRule, setPathOverrides } from '../src/shared/rules'
 import type { Rule, ScanResult } from '../src/shared/types'
 
