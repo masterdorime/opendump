@@ -458,9 +458,12 @@ ipcMain.handle('scan:run', async (): Promise<AppState> => {
   scanning = true
 
   try {
+    const spaceBefore = await driveSpace(DRIVE)
+    const usedBefore = spaceBefore ? spaceBefore.total - spaceBefore.free : undefined
+
     const scan = await scanDrive(DRIVE + '\\', {
       onProgress: (p: ScanProgress) => {
-        mainWindow?.webContents.send('scan:progress', p)
+        mainWindow?.webContents.send('scan:progress', { ...p, usedBytes: usedBefore })
       }
     })
 

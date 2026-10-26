@@ -34,6 +34,7 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
   const [busy, setBusy] = useState(false)
   const [live, setLive] = useState<SystemStats | null>(null)
   const [progress, setProgress] = useState<{ stage: string; done: number; total: number } | null>(null)
+  const [done, setDone] = useState<{ classified: number; escalated: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [other, setOther] = useState('')
 
@@ -93,11 +94,15 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
   const run = async (): Promise<void> => {
     setBusy(true)
     setError(null)
+    setDone(null)
     setProgress({ stage: 'starting', done: 0, total: unclassified })
     try {
       const result = await window.dsa.aiRun()
       onApplied(result.state)
-      onClose()
+      setProgress(null)
+      // Stay open so the run has a visible end, instead of the panel vanishing
+      // the instant the last batch resolves.
+      setDone({ classified: result.classified, escalated: result.escalated })
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -361,6 +366,30 @@ export function AiPanel({ unclassified, onClose, onApplied }: Props): React.JSX.
 
           {error && <div className="ai-error">{error}</div>}
         </div>
+
+        {done && !progress && (
+          <div className="ai-done">
+            <div className="ai-done-mark" aria-hidden="true">
+              ✓
+            </div>
+            <div className="ai-done-text">
+              <strong>
+                {done.classified > 0
+                  ? `Classified ${fmtCount(done.classified)} folders`
+                  : 'Nothing to classify'}
+              </strong>
+              <span>
+                {done.escalated > 0
+                  ? `${fmtCount(done.escalated)} checked with cloud`
+                  : 'All done on this machine'}{' '}
+                · added to Review
+              </span>
+            </div>
+            <button className="btn tiny primary" onClick={onClose}>
+              Review them
+            </button>
+          </div>
+        )}
 
         {progress && (
           <div className="ai-runbar">

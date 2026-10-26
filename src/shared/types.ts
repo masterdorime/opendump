@@ -40,6 +40,8 @@ export interface ScanProgress {
   bytes: number
   current: string
   elapsedMs: number
+  /** Used bytes on the drive at scan start — lets the UI show a real percentage. */
+  usedBytes?: number
 }
 
 export interface RuleMatch {

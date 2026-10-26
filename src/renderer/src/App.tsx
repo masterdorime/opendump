@@ -5,7 +5,7 @@ import { Treemap } from './components/Treemap'
 import { PlanModal } from './components/PlanModal'
 import { QuarantineView } from './components/QuarantineView'
 import { AiPanel } from './components/AiPanel'
-import { TutorialModal } from './components/TutorialModal'
+import { TourOverlay } from './components/TourOverlay'
 import type { SystemStats } from '@shared/system'
 import { memoryPressure } from '@shared/system'
 import { baseName, fmtBytes, fmtCount, fmtRelative, prettyPath } from './lib/format'
@@ -73,6 +73,7 @@ export default function App(): React.JSX.Element {
   const [result, setResult] = useState<BatchResult | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [tutorialOpen, setTutorialOpen] = useState(false)
+  const [scanNotice, setScanNotice] = useState<string | null>(null)
   const [stats, setStats] = useState<SystemStats | null>(null)
 
   useEffect(() => {
@@ -162,6 +163,14 @@ export default function App(): React.JSX.Element {
       setState(s)
       setFocusPath(s.tree?.path ?? null)
       setPicked(new Set())
+      if (s.meta) {
+        setScanNotice(
+          `Scan finished in ${Math.round(s.meta.durationMs / 1000)}s — ${fmtCount(
+            s.meta.totalDirs
+          )} folders, ${fmtBytes(s.meta.totalBytes)}`
+        )
+        window.setTimeout(() => setScanNotice(null), 9000)
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -252,6 +261,34 @@ export default function App(): React.JSX.Element {
   const usedPct = state?.space ? ((state.space.total - state.space.free) / state.space.total) * 100 : 0
   const heldCount = quarantineItems.filter((i) => i.status === 'quarantined').length
 
+  // A real percentage needs a denominator. Used bytes at scan start is close
+  // enough to be useful, and it gives way to an exact 100% when the walk ends.
+  const scanPct = useMemo(() => {
+    if (!progress) return null
+    if (progress.phase === 'totalling' || progress.phase === 'done') return 100
+    if (!progress.usedBytes || progress.usedBytes <= 0) return null
+    return Math.min(99, (progress.bytes / progress.usedBytes) * 100)
+  }, [progress])
+
+  const scanEta = useMemo(() => {
+    if (!progress) return 'starting…'
+    if (progress.phase === 'totalling') return 'finishing up…'
+    if (!progress.usedBytes || progress.elapsedMs < 1500) return 'estimating…'
+    const rate = progress.bytes / progress.elapsedMs
+    if (rate <= 0) return 'estimating…'
+    const remainingMs = Math.max(0, progress.usedBytes - progress.bytes) / rate
+    if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 'almost done…'
+    const seconds = Math.round(remainingMs / 1000)
+    return seconds >= 60 ? `~${Math.floor(seconds / 60)}m ${seconds % 60}s left` : `~${seconds}s left`
+  }, [progress])
+
+  const scanLabel =
+    progress?.phase === 'totalling'
+      ? 'Finishing up'
+      : progress?.phase === 'done'
+        ? 'Done'
+        : 'Scanning'
+
   if (loading) {
     return (
       <div className="boot">
@@ -278,11 +315,11 @@ export default function App(): React.JSX.Element {
           </div>
         </div>
 
-        <nav className="segmented" aria-label="View">
+        <nav className="segmented" aria-label="View" data-tour="nav">
           <button className={view === 'map' ? 'on' : ''} onClick={() => setView('map')}>
             Map
           </button>
-          <button className={view === 'review' ? 'on' : ''} onClick={() => setView('review')}>
+          <button className={view === 'review' ? 'on' : ''} onClick={() => setView('review')} data-tour="nav-review">
             Review
             {candidates.length > 0 && <span className="pill">{candidates.length}</span>}
           </button>
@@ -322,10 +359,10 @@ export default function App(): React.JSX.Element {
           >
             ?
           </button>
-          <button className="btn ghost" onClick={() => window.dsa.openRules()} title="Open rules.json">
+          <button className="btn ghost" onClick={() => window.dsa.openRules()} title="Open rules.json" data-tour="rules">
             Rules
           </button>
-          <button className="btn primary" onClick={runScan} disabled={scanning}>
+          <button className="btn primary" onClick={runScan} disabled={scanning} data-tour="scan">
             {scanning ? 'Scanning…' : state?.meta ? 'Rescan' : 'Scan drive'}
           </button>
         </div>
@@ -333,21 +370,27 @@ export default function App(): React.JSX.Element {
 
       {scanning && (
         <div className="scanbar">
-          <div className="scanbar-pulse" />
-          <div className="scanbar-text">
-            <strong>{progress ? progress.phase : 'starting'}</strong>
-            <span>
-              {progress
-                ? `${fmtCount(progress.dirs)} folders · ${fmtCount(progress.files)} files · ${fmtBytes(
-                    progress.bytes
-                  )} · ${(progress.elapsedMs / 1000).toFixed(1)}s`
-                : 'walking the filesystem…'}
-            </span>
+          <div className="scanbar-main">
+            <div className="scanbar-row">
+              <div className="scanbar-pulse" />
+              <strong>{scanLabel}</strong>
+              <span className="mono scanbar-pct">
+                {scanPct === null ? '—' : `${scanPct >= 99 ? 100 : Math.round(scanPct)}%`}
+              </span>
+              <span className="scanbar-eta">{scanEta}</span>
+              <span className="mono scanbar-counts">
+                {progress
+                  ? `${fmtCount(progress.dirs)} folders · ${fmtCount(progress.files)} files · ${fmtBytes(
+                      progress.bytes
+                    )}`
+                  : ''}
+              </span>
+            </div>
+            <div className={`scan-progress ${scanPct === null ? 'indeterminate' : ''}`}>
+              <i style={scanPct === null ? undefined : { width: `${scanPct}%` }} />
+            </div>
           </div>
           <div className="scanbar-path">{progress?.current ?? ''}</div>
-          <div className="scan-track" aria-hidden="true">
-            <i />
-          </div>
         </div>
       )}
 
@@ -482,7 +525,7 @@ export default function App(): React.JSX.Element {
         ) : (
           <div className="review-layout">
             <div className="review-toolbar">
-              <div className="chips">
+              <div className="chips" data-tour="tiers">
                 <button
                   className={`chip ${tierFilter === 'ALL' ? 'on' : ''}`}
                   onClick={() => setTierFilter('ALL')}
@@ -501,7 +544,7 @@ export default function App(): React.JSX.Element {
                 ))}
               </div>
               <div className="toolbar-actions">
-                <button className="btn tiny ghost" onClick={() => setAiOpen(true)}>
+                <button className="btn tiny ghost" onClick={() => setAiOpen(true)} data-tour="ai">
                   Local AI
                   {state && state.unclassified > 0 && (
                     <span className="pill">{fmtCount(state.unclassified)}</span>
@@ -587,6 +630,7 @@ export default function App(): React.JSX.Element {
                   className="btn primary"
                   disabled={!picked.size || busy}
                   onClick={() => setPlanOpen(true)}
+                  data-tour="quarantine"
                 >
                   Quarantine selected
                 </button>
@@ -618,12 +662,24 @@ export default function App(): React.JSX.Element {
       )}
 
       {tutorialOpen && (
-        <TutorialModal
+        <TourOverlay
           onFinish={() => {
             setTutorialOpen(false)
             void window.dsa.uiStateSet({ tutorialSeen: true })
           }}
         />
+      )}
+
+      {scanNotice && (
+        <div className="result-toast scan" role="status">
+          <div className="result-main">
+            <strong>{scanNotice}</strong>
+            <span>Ready to review — nothing has been removed.</span>
+          </div>
+          <button className="btn tiny ghost" onClick={() => setScanNotice(null)}>
+            Dismiss
+          </button>
+        </div>
       )}
 
       {result && (

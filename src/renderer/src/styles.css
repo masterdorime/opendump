@@ -1432,84 +1432,196 @@ button {
   height: 8px;
 }
 
-/* ---------- tutorial ---------- */
-.tutorial {
-  width: min(620px, calc(100vw - 80px));
+.ai-done {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--line-soft);
+  background: rgba(34, 197, 94, 0.06);
+  flex: 0 0 auto;
 }
-.tutorial-body {
-  padding: 26px 26px 20px;
+.ai-done-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #6ee7a0;
+  font-size: 13px;
+  flex: 0 0 auto;
 }
-.tutorial-count {
-  font-size: 10.5px;
+.ai-done-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ai-done-text strong {
+  font-size: 12.5px;
+  color: #a7f3c0;
+}
+.ai-done-text span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- guided tour ---------- */
+.tour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+}
+.tour-spot {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(5, 8, 12, 0.78);
+  outline: 1px solid rgba(56, 189, 248, 0.5);
+  transition: top 160ms ease, left 160ms ease, width 160ms ease, height 160ms ease;
+  pointer-events: none;
+}
+.tour-card {
+  position: fixed;
+  pointer-events: auto;
+  background: #0d141d;
+  border: 1px solid #274157;
+  border-radius: 12px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 30px 70px -24px #000, 0 0 0 1px rgba(56, 189, 248, 0.08);
+}
+.tour-count {
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   color: var(--dim);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
-.tutorial-body h2 {
-  margin: 0 0 12px;
-  font-size: 19px;
+.tour-card h2 {
+  margin: 0 0 9px;
+  font-size: 16px;
   line-height: 1.3;
   letter-spacing: -0.01em;
 }
-.tutorial-body p {
+.tour-card p {
   margin: 0;
+  font-size: 12.5px;
+  line-height: 1.62;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.65;
 }
-.tutorial-note {
-  margin-top: 14px;
-  padding: 10px 12px;
+.tour-hint {
+  margin-top: 11px;
+  padding: 8px 10px;
   border-left: 2px solid var(--accent);
-  background: rgba(56, 189, 248, 0.06);
+  background: rgba(56, 189, 248, 0.07);
   border-radius: 0 6px 6px 0;
   font-size: 11.5px;
-  color: var(--muted);
-  line-height: 1.55;
+  color: #b7d9ee;
 }
-.tutorial-dots {
-  display: flex;
-  gap: 6px;
-  margin-top: 22px;
-}
-.tutorial-dots span {
-  width: 24px;
-  height: 3px;
-  border-radius: 2px;
-  background: #1e2a3a;
-}
-.tutorial-dots span.on {
-  background: var(--accent);
-}
-.btn.help {
-  width: 30px;
-  padding: 6px 0;
-  text-align: center;
-  font-weight: 600;
-}
-
-.ai-loading {
+.tour-actions {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 26px 18px;
-  font-size: 12.5px;
-  color: var(--muted);
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 15px;
 }
-.spinner {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 2px solid #24354a;
-  border-top-color: var(--accent);
-  animation: spin 700ms linear infinite;
+.tour-nav {
+  display: flex;
+  gap: 7px;
+}
+
+/* ---------- scan progress ---------- */
+.scanbar-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.scanbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+}
+.scanbar-row strong {
+  color: var(--accent);
+}
+.scanbar-pct {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 38px;
+}
+.scanbar-eta {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.scanbar-counts {
+  color: var(--dim);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.scan-progress {
+  position: relative;
+  height: 4px;
+  background: #12202d;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.scan-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #22d3ee);
+  border-radius: 3px;
+  transition: width 320ms ease;
+}
+.scan-progress.indeterminate i {
+  width: 34%;
+  animation: scanSweep 1.5s linear infinite;
+}
+.result-toast.scan {
+  bottom: 84px;
+}
+
+/* ---------- ai completion ---------- */
+.ai-done {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--line-soft);
+  background: rgba(34, 197, 94, 0.06);
   flex: 0 0 auto;
 }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.ai-done-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #6ee7a0;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+.ai-done-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ai-done-text strong {
+  font-size: 12.5px;
+  color: #a7f3c0;
+}
+.ai-done-text span {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
