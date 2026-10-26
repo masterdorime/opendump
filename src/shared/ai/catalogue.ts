@@ -77,8 +77,37 @@ export interface Recommendation {
 
 const VRAM_OVERHEAD = 1.5 * GiB
 const COMFORT_MARGIN = 1.0 * GiB
-const RUNNER_RAM = 1.5 * GiB
+export const RUNNER_RAM_BYTES = 1.5 * GiB
 const CPU_OVERHEAD = 2.0 * GiB
+
+/**
+ * Last line of defence before a run starts.
+ *
+ * The UI already disables the button, but the main process must not depend on
+ * that: loading a model with too little free RAM is what makes a laptop appear
+ * frozen. Returns a human-readable refusal, or null when the run is safe.
+ */
+export function checkRunFeasible(
+  hardware: HardwareInfo,
+  modelBytes: number
+): string | null {
+  if (hardware.ramFreeBytes < RUNNER_RAM_BYTES) {
+    return `Only ${(hardware.ramFreeBytes / GiB).toFixed(
+      1
+    )} GB of RAM is free. The model runner needs about 1.5 GB on top of the model â€” close some apps and try again.`
+  }
+
+  if (hardware.vramFreeBytes !== null) {
+    const needed = modelBytes + VRAM_OVERHEAD
+    if (hardware.vramFreeBytes < needed) {
+      return `This model needs about ${(needed / GiB).toFixed(1)} GB of VRAM but only ${(
+        hardware.vramFreeBytes / GiB
+      ).toFixed(1)} GB is free. Pick a smaller model.`
+    }
+  }
+
+  return null
+}
 
 const gb = (bytes: number): string => `${(bytes / GiB).toFixed(1)} GB`
 
@@ -101,7 +130,7 @@ export function recommendModels(
   hardware: HardwareInfo,
   catalogue: ModelSpec[] = CATALOGUE
 ): Recommendation[] {
-  const ramOk = hardware.ramFreeBytes >= RUNNER_RAM
+  const ramOk = hardware.ramFreeBytes >= RUNNER_RAM_BYTES
 
   const recs: Recommendation[] = catalogue.map((spec) => {
     const neededVram = spec.sizeBytes + VRAM_OVERHEAD
@@ -110,8 +139,8 @@ export function recommendModels(
       return {
         spec,
         fit: 'wont-fit' as const,
-        detail: `Only ${gb(hardware.ramFreeBytes)} RAM is free — the model runner needs about ${gb(
-          RUNNER_RAM
+        detail: `Only ${gb(hardware.ramFreeBytes)} RAM is free â€” the model runner needs about ${gb(
+          RUNNER_RAM_BYTES
         )}. Close some apps and re-check.`
       }
     }
@@ -130,7 +159,7 @@ export function recommendModels(
           fit: 'tight' as const,
           detail: `Needs ${gb(neededVram)} of VRAM and ${gb(
             hardware.vramFreeBytes
-          )} is free — it may spill to RAM and slow down.`
+          )} is free â€” it may spill to RAM and slow down.`
         }
       }
     }

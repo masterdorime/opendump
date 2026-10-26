@@ -6,7 +6,7 @@ import { compileRules, findCandidates, findUnclassified, setPathOverrides } from
 import { quarantine, listQuarantine, purge, restore, inspectStaged } from '@shared/executor'
 import type { ExecItem, QuarantineItem, StagedDetail } from '@shared/executor'
 import { readHardware } from '@shared/ai/hardware'
-import { CATALOGUE, recommendModels, pickDefault } from '@shared/ai/catalogue'
+import { CATALOGUE, recommendModels, pickDefault, checkRunFeasible } from '@shared/ai/catalogue'
 import type { ModelSpec, Recommendation } from '@shared/ai/catalogue'
 import { parsePullLine } from '@shared/ai/pull'
 import type { PullProgress } from '@shared/ai/pull'
@@ -590,8 +590,8 @@ ipcMain.handle('ai:run', async () => {
     throw new Error(`${settings.localModel} is not installed yet — download it first.`)
   }
 
-  const fit = canFit(model.sizeBytes, hardware.vramFreeBytes ?? 0)
-  if (!fit.ok && hardware.vramFreeBytes !== null) throw new Error(fit.reason)
+  const fitRefusal = checkRunFeasible(hardware, model.sizeBytes)
+  if (fitRefusal) throw new Error(fitRefusal)
 
   const { rules } = await loadRules()
   const compiled = compileRules(rules)

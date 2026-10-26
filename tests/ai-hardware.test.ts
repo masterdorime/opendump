@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseNvidiaSmi, buildHardware, type HardwareInfo } from '../src/shared/ai/hardware'
-import { recommendModels, pickDefault, CATALOGUE } from '../src/shared/ai/catalogue'
+import { recommendModels, pickDefault, CATALOGUE, checkRunFeasible } from '../src/shared/ai/catalogue'
 import { parsePullLine } from '../src/shared/ai/pull'
 import { mergeSettings, DEFAULT_SETTINGS } from '../src/shared/ai/settings'
 
@@ -93,6 +93,21 @@ describe('recommendModels', () => {
   it('ships a catalogue with sane, increasing sizes', () => {
     expect(CATALOGUE.length).toBeGreaterThanOrEqual(4)
     for (const spec of CATALOGUE) expect(spec.sizeBytes).toBeGreaterThan(0.5 * GiB)
+  })
+})
+
+describe('checkRunFeasible', () => {
+  it('refuses when RAM is short even though VRAM is plentiful', () => {
+    const reason = checkRunFeasible(hw({ ramFreeBytes: 0.7 * GiB }), 3.3 * GiB)
+    expect(reason).toMatch(/RAM/i)
+  })
+
+  it('refuses a model too large for free VRAM', () => {
+    expect(checkRunFeasible(hw(), 6.6 * GiB)).toMatch(/VRAM/i)
+  })
+
+  it('allows a model that fits both budgets', () => {
+    expect(checkRunFeasible(hw(), 3.3 * GiB)).toBeNull()
   })
 })
 
