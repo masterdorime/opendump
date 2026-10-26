@@ -369,12 +369,14 @@ installer + portable build, CI, releases.
 
 `https://github.com/masterdorime/opendump-v2` — pre-alpha Rust core + CLI, 24 tests.
 
-- **Ported:** rule engine, scanner, executor (quarantine/restore/purge + journal), CLI.
-- **Not ported:** Tauri shell, AI layer, `find_unclassified`, MFT reader.
-- **Still not an app.** There is no window and no installer. The CLI *can* quarantine and purge,
-  gated behind `--yes` and a rule re-check — so "v2 cannot delete anything" is no longer true.
-- Measured: full `C:\` scan in **102.8 s** vs 172–299 s for this app; binary **1.75 MB** vs
-  366 MB installed. Classifications match v1 where they overlap.
+- **Ported:** rule engine, scanner, executor (quarantine/restore/purge + journal), CLI, and a
+  Tauri desktop shell (9.98 MB exe, 2.26 MB installer).
+- **Not ported:** v0.5's treemap, spotlight tour, purge-confirmation screen, live memory meters,
+  AI layer, `find_unclassified`, MFT reader.
+- **It is now an app**, if a minimal one: scan → review → quarantine → restore → purge in a
+  window. The v0.5 UI is still the richer product.
+- Measured: full `C:\` scan in **102.8 s** (CLI) / 165 s through the Tauri window vs 172–299 s
+  for this app. Classifications match v1 where they overlap.
 
 Rules for working across the two:
 
