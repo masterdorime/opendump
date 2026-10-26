@@ -262,6 +262,9 @@ The useful contribution is a rule, not code — the classifier is data. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the rule format and the invariants that will not be
 merged away, and open a **Misclassified folder** issue if a folder gets the wrong tier.
 
+Working on the codebase itself? **[AGENTS.md](AGENTS.md)** is the orientation document: architecture,
+safety invariants, data locations, hard-won gotchas, and the current gaps.
+
 ## License
 
 [MIT](LICENSE) © 2026 Tristan.
