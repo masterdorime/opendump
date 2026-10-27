@@ -15,11 +15,11 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
 | Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **no release yet** |
-| Last code commit | `d9ff7de` | `502734b` |
-| Tests | **72** (vitest) | **41** (cargo) |
-| Lines | ~5,450 TS/TSX | **3,966** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 6.39 MB exe, 89 MB idle RAM |
-| Status | **the supported product** | pre-alpha; map and meters, no tour/AI |
+| Last code commit | `d9ff7de` | `806f258` |
+| Tests | **72** (vitest) | **43** (cargo) |
+| Lines | ~5,450 TS/TSX | **4,317** Rust |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 6.43 MB exe, 89 MB idle, 130 MB with a map |
+| Status | **the supported product** | pre-alpha; v1-parity shell, no tour/AI |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
 > file itself is one. If `git log --oneline` shows work beyond those SHAs, this document is
@@ -31,9 +31,10 @@ Both working trees are clean. Both remotes are public and pushed. CI (GitHub Act
 ### Start here
 
 1. Read §3 and §4 to learn what each binary actually does today.
-2. The **treemap and the memory meters are built** (`171017e`, `502734b`). The squash maths
-   lives in `crates/opendump-core/src/layout.rs`, the hardware probe in `hardware.rs` — both
-   tested under `cargo test`. The next piece of work is the guided tour.
+2. **The shell matches v1** as of `806f258` — red dark theme, nested treemap, inspector,
+   three peer views, free-space meter. `crates/opendump-core/src/layout.rs` holds the squarify
+   maths and `hardware.rs` the probes; both are tested under `cargo test`. The next piece of
+   work is the guided tour, then the scan cache.
 3. Before touching anything that deletes, read §1 and §6. Those are constraints, not taste.
 4. If you change `rules/rules.json`, remember it exists twice (§4) and that the native app
    bakes it in at compile time.
@@ -418,6 +419,12 @@ ceiling at `REVIEW` and keep targeting unclassified folders; both were decisions
 
 **5. MFT scanner.** The actual reason Rust was chosen. `scan.rs` is isolated (one public
 `scan(root) -> ScanReport`) so it can be replaced without touching rules, executor, or UI.
+
+**6. Scan cache — the biggest remaining gap.** v1 reopens to a populated map instantly from
+`scan-cache.json` (58 MB of JSON). v2 rescans for ~90 s every launch. Do not copy v1's format:
+a front-coded arena (one `Vec` of fixed-size nodes plus a shared name blob) is ~6–10 MB and
+loads in tens of milliseconds, which also keeps the RAM promise that a parsed JSON tree would
+break.
 
 ### v1 (maintenance)
 
