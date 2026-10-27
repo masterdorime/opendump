@@ -15,11 +15,11 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
 | Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **no release yet** |
-| Last code commit | `d9ff7de` | `171017e` |
-| Tests | **72** (vitest) | **35** (cargo) |
-| Lines | ~5,450 TS/TSX | **3,688** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 6.36 MB exe, 89 MB idle RAM |
-| Status | **the supported product** | pre-alpha; now has the treemap |
+| Last code commit | `d9ff7de` | `502734b` |
+| Tests | **72** (vitest) | **41** (cargo) |
+| Lines | ~5,450 TS/TSX | **3,966** Rust |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 6.39 MB exe, 89 MB idle RAM |
+| Status | **the supported product** | pre-alpha; map and meters, no tour/AI |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
 > file itself is one. If `git log --oneline` shows work beyond those SHAs, this document is
@@ -31,9 +31,9 @@ Both working trees are clean. Both remotes are public and pushed. CI (GitHub Act
 ### Start here
 
 1. Read §3 and §4 to learn what each binary actually does today.
-2. The **treemap is built** (`171017e`). §11 item 1 records the two traps it
-   cleared; the squash maths now lives in `crates/opendump-core/src/layout.rs` and is tested
-   there. The next piece of work is the live RAM/VRAM meters.
+2. The **treemap and the memory meters are built** (`171017e`, `502734b`). The squash maths
+   lives in `crates/opendump-core/src/layout.rs`, the hardware probe in `hardware.rs` — both
+   tested under `cargo test`. The next piece of work is the guided tour.
 3. Before touching anything that deletes, read §1 and §6. Those are constraints, not taste.
 4. If you change `rules/rules.json`, remember it exists twice (§4) and that the native app
    bakes it in at compile time.
@@ -160,16 +160,17 @@ Existing releases: v0.1.0 → v0.5.0, each with `-portable.exe` and `-setup.exe`
 ## 4. v2 state — Rust
 
 ```
-crates/opendump-core/   1,519 src + 491 test lines
+crates/opendump-core/   1,657 src + 530 test lines
   types.rs      Tier, Rule, RuleMatch, DirEntry
   tokens.rs     %LOCALAPPDATA%-style expansion, injectable map
   rules.rs      compile, AND matchers, find_candidates, parent_of/depth_of
   scan.rs       recursive walk, pkg flag; isolated so an MFT reader can replace it
   executor.rs   quarantine/restore/purge + journal + inspect_staged
   layout.rs     squarified treemap over plain Box4 rects — no UI dependency
+  hardware.rs   GlobalMemoryStatusEx for RAM, nvidia-smi for free VRAM
   format.rs     bytes(), thousands() — shared by every front end
 crates/opendump-cli/    448 lines — opendump.exe (1.91 MB)
-apps/native/            1,230 lines — opendump-native.exe (6.36 MB), egui + glow
+apps/native/            1,331 lines — opendump-native.exe (6.39 MB), egui + glow
 ```
 
 `apps/native/src/main.rs` is one file, deliberately — everything about the window is in reach:
@@ -178,23 +179,23 @@ apps/native/            1,230 lines — opendump-native.exe (6.36 MB), egui + gl
 consts    BG PANEL LINE TEXT MUTED DIM ACCENT + SAFE REVIEW KEEP LOCKED  (the whole palette)
 structs   NodeInfo · Pane · Tile · ScanView · StagedView · ConfirmState · Message
 helpers   base_dir · exec_options · rules · default_drive · staged_snapshot · classify
-impl App  195–394    logic:  start_scan · quarantine_picked · restore_all · purge_ids · drain
-helpers   396–536    pretty · file_name · clamp_label · on_fill · tile_tint · tier_color · …
+impl App  198–412    logic:  start_scan · quarantine_picked · restore_all · purge_ids · drain
+helpers   414–603    spawn_probe · metric · pretty · file_name · clamp_label · on_fill · tile_tint
 impl      eframe::App  update()
-impl App  619–1282   views:  summary · review · quarantine_panel · tabs · map ·
+impl App  706–1369   views:  summary · review · quarantine_panel · tabs · map ·
                              layout_tiles · confirm_modal
-helpers   stat · selftest · main
+helpers   stat · print_memory · selftest · main
 ```
 
 Work runs on a `std::thread`; results return as `Message` over an `mpsc` channel and are drained
 at the top of `update()`. There is no async runtime and no task graph.
 
 **Ported:** rule engine, tokens, scanner, executor (quarantine/restore/purge/journal),
-`inspect_staged`, squarified treemap layout, CLI (`scan|quarantine|list|restore|purge`), native
-window (scan → map → review → quarantine → restore → purge, with a purge confirmation listing
-real filenames).
+`inspect_staged`, squarified treemap layout, hardware probe, CLI
+(`scan|quarantine|list|restore|purge`), native window (scan → map → review → quarantine →
+restore → purge, with a purge confirmation listing real filenames).
 
-**Not ported:** spotlight tour, live memory meters, AI layer, `find_unclassified`, MFT reader.
+**Not ported:** spotlight tour, AI layer, `find_unclassified`, MFT reader.
 
 **Rules load differently in the two front ends — this bites.** The CLI reads `rules/rules.json`
 from disk (searching cwd, beside the exe, and `--rules <path>`). The native app
@@ -205,7 +206,7 @@ after a rebuild; the CLI picks it up immediately. The v1 and v2 copies are byte-
 ### v2 commands
 
 ```bash
-cargo test --workspace                 # 35 tests
+cargo test --workspace                 # 41 tests
 cargo run --release                    # CLI
 ./target/release/opendump scan "C:\" --top 20
 ./target/release/opendump quarantine <path> --yes
@@ -214,6 +215,7 @@ cargo run --release                    # CLI
 cd apps/native && cargo run --release            # window
 cargo run --release -- --scan                    # window, scanning on open
 cargo run --release -- --selftest                # headless scan + classify + print
+cargo run --release -- --probe                   # RAM/VRAM only, no scan (fast)
 ```
 
 ### v2 data
@@ -399,13 +401,15 @@ The two traps it cleared are worth knowing because they shaped the code:
   `levels: HashMap<String, Vec<String>>`), with a floor of `total_bytes / 200_000` clamped to
   2 MB. Parents are always at least as large as their children, so nothing reachable is lost.
 
-**2. Live RAM/VRAM meters — do this next.** v2 has no hardware probe at all. Port the idea from
-`src/shared/ai/hardware.ts` and `src/shared/system.ts` in v1: total/free RAM and VRAM, polled on
-a timer, cheap enough to run while idle. This is a prerequisite for the AI gate, because RAM is
-the gate (§6).
+**2. Memory meters — shipped in `502734b`.** RAM from `GlobalMemoryStatusEx`, VRAM from
+`nvidia-smi` because it is the only source that reports *free* video memory; WMI's `AdapterRAM`
+is a 32-bit field that reports an 8 GB card as 4 GB. A background thread polls RAM every 1.5 s
+and the GPU about every 6 s — the subprocess costs ~244 ms and must never run on a drawing
+frame. When no NVIDIA adapter answers, the UI prints an em dash instead of a guess, and
+`--probe` prints the readout without scanning 400 GB.
 
-**3. Guided tour.** v1's `TourOverlay.tsx` is the reference: a list of steps, each with a
-target `Rect`, a heading, and body copy; everything else dims. In egui the dim is a
+**3. Guided tour — do this next.** v1's `TourOverlay.tsx` is the reference: a list of steps,
+each with a target `Rect`, a heading, and body copy; everything else dims. In egui the dim is a
 `layer_painter` fill plus a hole — and note §7.7, an `Area`'s painter is clipped to its own
 content rect.
 
