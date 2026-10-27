@@ -15,11 +15,15 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
 | Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **no release yet** |
-| HEAD | `d9ff7de` | `90ea880` |
+| Last code commit | `d9ff7de` | `90ea880` |
 | Tests | **72** (vitest) | **28** (cargo) |
 | Lines | ~5,450 TS/TSX | **3,121** Rust |
 | Installed / binary | 366 MB installed, 116.6 MB installer | 6.29 MB exe, 89 MB idle RAM |
 | Status | **the supported product** | pre-alpha, feature-parity on the engine |
+
+> The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
+> file itself is one. If `git log --oneline` shows work beyond those SHAs, this document is
+> describing an older state — read the new commits before trusting §3–§7.
 
 Both working trees are clean. Both remotes are public and pushed. CI (GitHub Actions,
 `windows-latest`) is green on both.
