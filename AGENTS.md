@@ -15,11 +15,11 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
 | Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **no release yet** |
-| Last code commit | `d9ff7de` | `90ea880` |
-| Tests | **72** (vitest) | **28** (cargo) |
-| Lines | ~5,450 TS/TSX | **3,121** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 6.29 MB exe, 89 MB idle RAM |
-| Status | **the supported product** | pre-alpha, feature-parity on the engine |
+| Last code commit | `d9ff7de` | `171017e` |
+| Tests | **72** (vitest) | **35** (cargo) |
+| Lines | ~5,450 TS/TSX | **3,688** Rust |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 6.36 MB exe, 89 MB idle RAM |
+| Status | **the supported product** | pre-alpha; now has the treemap |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
 > file itself is one. If `git log --oneline` shows work beyond those SHAs, this document is
@@ -31,8 +31,9 @@ Both working trees are clean. Both remotes are public and pushed. CI (GitHub Act
 ### Start here
 
 1. Read §3 and §4 to learn what each binary actually does today.
-2. The next piece of work is the **treemap in v2's native window** — §11 item 1 lists the two
-   traps that will cost you an hour if you find them yourself.
+2. The **treemap is built** (`171017e`). §11 item 1 records the two traps it
+   cleared; the squash maths now lives in `crates/opendump-core/src/layout.rs` and is tested
+   there. The next piece of work is the live RAM/VRAM meters.
 3. Before touching anything that deletes, read §1 and §6. Those are constraints, not taste.
 4. If you change `rules/rules.json`, remember it exists twice (§4) and that the native app
    bakes it in at compile time.
@@ -63,8 +64,8 @@ v1 is the working product: full UI, local AI, signed-off releases. v2 is a Rust 
 - v1 installs **366 MB** and idles at **377 MB** — awkward for a disk/memory tool.
 - The scan is the real bottleneck, and an MFT reader is a native-code problem.
 
-v2 has not replaced v1. Nobody should be told to use v2 yet: it has no treemap, no tour, no AI,
-and no signed build.
+v2 has not replaced v1. Nobody should be told to use v2 yet: it has no tour, no AI, no cache and
+no signed build.
 
 **A Tauri shell was built and then deleted.** It worked (9.98 MB exe, 2.26 MB installer) but
 duplicated the native window for **316 MB of WebView2**. Do not re-add a webview front end
@@ -159,38 +160,41 @@ Existing releases: v0.1.0 → v0.5.0, each with `-portable.exe` and `-setup.exe`
 ## 4. v2 state — Rust
 
 ```
-crates/opendump-core/   1,334 src + 467 test lines
+crates/opendump-core/   1,519 src + 491 test lines
   types.rs      Tier, Rule, RuleMatch, DirEntry
   tokens.rs     %LOCALAPPDATA%-style expansion, injectable map
-  rules.rs      compile, AND matchers, find_candidates
+  rules.rs      compile, AND matchers, find_candidates, parent_of/depth_of
   scan.rs       recursive walk, pkg flag; isolated so an MFT reader can replace it
   executor.rs   quarantine/restore/purge + journal + inspect_staged
+  layout.rs     squarified treemap over plain Box4 rects — no UI dependency
   format.rs     bytes(), thousands() — shared by every front end
 crates/opendump-cli/    448 lines — opendump.exe (1.91 MB)
-apps/native/            872 lines — opendump-native.exe (6.29 MB), egui + glow
+apps/native/            1,230 lines — opendump-native.exe (6.36 MB), egui + glow
 ```
 
 `apps/native/src/main.rs` is one file, deliberately — everything about the window is in reach:
 
 ```
 consts    BG PANEL LINE TEXT MUTED DIM ACCENT + SAFE REVIEW KEEP LOCKED  (the whole palette)
-structs   ScanView · StagedView · ConfirmState · Message
+structs   NodeInfo · Pane · Tile · ScanView · StagedView · ConfirmState · Message
 helpers   base_dir · exec_options · rules · default_drive · staged_snapshot · classify
-impl App  lines 165–316   logic:  start_scan · quarantine_picked · restore_all · purge_ids · drain
-impl      eframe::App     update()
-impl App  lines 497–889   views:  summary · review · quarantine_panel · confirm_modal
-helpers   pretty · tier_color · tier_label · install_fonts · install_style · stat · selftest · main
+impl App  195–394    logic:  start_scan · quarantine_picked · restore_all · purge_ids · drain
+helpers   396–536    pretty · file_name · clamp_label · on_fill · tile_tint · tier_color · …
+impl      eframe::App  update()
+impl App  619–1282   views:  summary · review · quarantine_panel · tabs · map ·
+                             layout_tiles · confirm_modal
+helpers   stat · selftest · main
 ```
 
 Work runs on a `std::thread`; results return as `Message` over an `mpsc` channel and are drained
-at the top of `update()`. There is no async runtime, no task graph, and no retained scan tree.
+at the top of `update()`. There is no async runtime and no task graph.
 
 **Ported:** rule engine, tokens, scanner, executor (quarantine/restore/purge/journal),
-`inspect_staged`, CLI (`scan|quarantine|list|restore|purge`), native window (scan → review →
-quarantine → restore → purge, with a purge confirmation listing real filenames).
+`inspect_staged`, squarified treemap layout, CLI (`scan|quarantine|list|restore|purge`), native
+window (scan → map → review → quarantine → restore → purge, with a purge confirmation listing
+real filenames).
 
-**Not ported:** treemap, spotlight tour, live memory meters, AI layer, `find_unclassified`,
-MFT reader.
+**Not ported:** spotlight tour, live memory meters, AI layer, `find_unclassified`, MFT reader.
 
 **Rules load differently in the two front ends — this bites.** The CLI reads `rules/rules.json`
 from disk (searching cwd, beside the exe, and `--rules <path>`). The native app
@@ -201,7 +205,7 @@ after a rebuild; the CLI picks it up immediately. The v1 and v2 copies are byte-
 ### v2 commands
 
 ```bash
-cargo test --workspace                 # 28 tests
+cargo test --workspace                 # 35 tests
 cargo run --release                    # CLI
 ./target/release/opendump scan "C:\" --top 20
 ./target/release/opendump quarantine <path> --yes
@@ -383,30 +387,22 @@ Be precise about this when reporting status — the user checks.
 
 ### v2 (active)
 
-**1. Treemap — do this next.** The signature view and the only obvious missing feature.
+**1. Treemap — shipped in `171017e`.** Map/Review tabs, area is bytes, colour is safety,
+hover shows the full path, size, share and the rule's reason; click zooms, `‹ up` walks back.
+The two traps it cleared are worth knowing because they shaped the code:
 
-Two traps, both verified in the source:
+- `scan()` returns a **flat `Vec<DirEntry>`** — `ScanReport { root, dirs, total_bytes,
+  total_files, skipped, duration_ms }`, no parent links and no children. `parent_of()` and
+  `depth_of()` in `rules.rs` are now `pub`.
+- The native app **used to discard `report.dirs`** after classifying. It now builds a pruned
+  node graph in the scan thread (`nodes: HashMap<String, NodeInfo>` plus
+  `levels: HashMap<String, Vec<String>>`), with a floor of `total_bytes / 200_000` clamped to
+  2 MB. Parents are always at least as large as their children, so nothing reachable is lost.
 
-- `scan()` returns a **flat `Vec<DirEntry>`**, not a tree: `ScanReport { root, dirs,
-  total_bytes, total_files, skipped, duration_ms }`. `DirEntry` is `path`, `size` (recursive),
-  `files`, `has_package_json`. There are no parent links and no children.
-- The native app **throws `report.dirs` away** after `find_candidates(&report.dirs, &compiled,
-  1024 * 1024)` — `ScanView` keeps only root/folders/files/bytes/duration/candidates. A
-  treemap must retain the directories, and on a full `C:\` that is ~368k entries at ~100 bytes
-  each — plan for it rather than discovering an extra ~40 MB after the fact.
-- `parent_of()` and `depth_of()` already exist in `crates/opendump-core/src/rules.rs` but are
-  `pub(crate)`. Group-by-parent needs them public, or a local copy in the native app.
-
-Suggested order: make the two helpers `pub` → keep `dirs` in `ScanView` behind a pruned
-subset (drop < 0.02 % of the root, as v1 does) → build children by grouping on `parent_of` →
-squarify each level into `egui::Rect`s → draw with `ui.painter().rect_filled()` + hover
-tooltip + click-to-zoom + breadcrumb. `v1/src/renderer/src/components/Treemap.tsx` is the
-visual reference (d3 squarified), not something to port line by line.
-
-**2. Live RAM/VRAM meters.** v2 has no hardware probe at all. Port the idea from
-`src/shared/ai/hardware.ts` and `src/shared/system.ts` in v1: total/free RAM and VRAM, polled
-on a timer, cheap enough to run while idle. This is a prerequisite for the AI gate, because
-RAM is the gate (§6).
+**2. Live RAM/VRAM meters — do this next.** v2 has no hardware probe at all. Port the idea from
+`src/shared/ai/hardware.ts` and `src/shared/system.ts` in v1: total/free RAM and VRAM, polled on
+a timer, cheap enough to run while idle. This is a prerequisite for the AI gate, because RAM is
+the gate (§6).
 
 **3. Guided tour.** v1's `TourOverlay.tsx` is the reference: a list of steps, each with a
 target `Rect`, a heading, and body copy; everything else dims. In egui the dim is a
