@@ -15,11 +15,11 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
 | Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **no release yet** |
-| Last code commit | `d9ff7de` | `806f258` |
-| Tests | **72** (vitest) | **43** (cargo) |
-| Lines | ~5,450 TS/TSX | **4,317** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 6.43 MB exe, 89 MB idle, 130 MB with a map |
-| Status | **the supported product** | pre-alpha; v1-parity shell, no tour/AI |
+| Last code commit | `8d1a4f7` | `1bfd9ca` |
+| Tests | **72** (vitest) | **73** (cargo) |
+| Lines | ~5,450 TS/TSX | **7,865** Rust |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 6.93 MB exe, ~95 MB idle, ~130 MB with a map |
+| Status | **the supported product** | pre-alpha; full shell, local AI, MFT, cache — no tour, no release |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
 > file itself is one. If `git log --oneline` shows work beyond those SHAs, this document is
@@ -38,6 +38,44 @@ Both working trees are clean. Both remotes are public and pushed. CI (GitHub Act
 3. Before touching anything that deletes, read §1 and §6. Those are constraints, not taste.
 4. If you change `rules/rules.json`, remember it exists twice (§4) and that the native app
    bakes it in at compile time.
+
+### Map the repo before you read it
+
+**`graphify-out/` holds a knowledge graph of this repo.** Query it instead of opening files to
+find your way around — reading six files to learn "where does classification happen" costs more
+than asking the graph.
+
+```bash
+graphify query "where does classification happen?"     # BFS, broad
+graphify query "path from rules to quarantine" --dfs   # trace one route
+graphify explain "findCandidates"                      # one node, in plain language
+graphify path "compileRules" "executor"                # shortest path between two concepts
+```
+
+Built 2026-10-29: **51 files · 411 nodes · 915 edges · 17 communities**, AST for code (free) plus
+semantic extraction for 10 docs. `graphify-out/GRAPH_REPORT.md` is the readable summary;
+`graph.html` opens in a browser with no server.
+
+**Rebuild after structural change** — a new module, a moved file, a deleted feature:
+
+```bash
+/graphify .            # full rebuild, ~1 minute here
+/graphify . --update   # only new and changed files
+```
+
+`graphify-out/` is generated and gitignored: a fresh clone rebuilds it in a minute. Do not hand
+edit anything in it.
+
+### Keep this file true
+
+**Every change that alters behaviour, structure, a number, or a decision updates this file in the
+same commit.** A handoff that describes a previous version is worse than none: the next agent
+reads it as fact and rebuilds what already exists.
+
+That covers, at minimum: test counts, line counts, binary sizes, the crate/component list, the
+roadmap, and every "decisions" or "do not" entry a change contradicts. If a change is genuinely
+undocumented when you stop — a half-finished experiment — say so in the last commit message and
+here, so the gap is visible rather than assumed filled.
 
 ---
 
@@ -161,42 +199,52 @@ Existing releases: v0.1.0 → v0.5.0, each with `-portable.exe` and `-setup.exe`
 ## 4. v2 state — Rust
 
 ```
-crates/opendump-core/   1,657 src + 530 test lines
+crates/opendump-core/   ~2,600 src + ~900 test lines
   types.rs      Tier, Rule, RuleMatch, DirEntry
   tokens.rs     %LOCALAPPDATA%-style expansion, injectable map
-  rules.rs      compile, AND matchers, find_candidates, parent_of/depth_of
-  scan.rs       recursive walk, pkg flag; isolated so an MFT reader can replace it
+  rules.rs      compile, AND matchers, find_candidates, find_unclassified, parent_of/depth_of
+  scan.rs       recursive walk + scan_any (MFT first, walk as fallback)
+  mft.rs        NTFS Master File Table reader: boot sector, fixups, run lists, tree build
   executor.rs   quarantine/restore/purge + journal + inspect_staged
   layout.rs     squarified treemap over plain Box4 rects — no UI dependency
-  hardware.rs   GlobalMemoryStatusEx for RAM, nvidia-smi for free VRAM
+  hardware.rs   GlobalMemoryStatusEx RAM, nvidia-smi VRAM, GetDiskFreeSpaceEx
+  inspect.rs    folder contents: extension mix, largest files, hashed-vs-human names
+  ai.rs         localhost Ollama client, prompt, schema, parse_verdicts (REVIEW ceiling)
+  cache.rs      versioned binary scan cache, front-coded paths, rules-hash invalidated
   format.rs     bytes(), thousands() — shared by every front end
 crates/opendump-cli/    448 lines — opendump.exe (1.91 MB)
-apps/native/            1,331 lines — opendump-native.exe (6.39 MB), egui + glow
+apps/native/            ~3,300 lines — opendump-native.exe (6.93 MB), egui + glow
 ```
 
 `apps/native/src/main.rs` is one file, deliberately — everything about the window is in reach:
 
 ```
-consts    BG PANEL LINE TEXT MUTED DIM ACCENT + SAFE REVIEW KEEP LOCKED  (the whole palette)
-structs   NodeInfo · Pane · Tile · ScanView · StagedView · ConfirmState · Message
-helpers   base_dir · exec_options · rules · default_drive · staged_snapshot · classify
-impl App  198–412    logic:  start_scan · quarantine_picked · restore_all · purge_ids · drain
-helpers   414–603    spawn_probe · metric · pretty · file_name · clamp_label · on_fill · tile_tint
-impl      eframe::App  update()
-impl App  706–1369   views:  summary · review · quarantine_panel · tabs · map ·
-                             layout_tiles · confirm_modal
-helpers   stat · print_memory · selftest · main
+consts    Palette (dark/light) + INK; pal() reads a static flag
+structs   NodeInfo · Pane (Map/Review/Quarantine/Ai/Rules) · Visual · MapCache · ScanView ·
+          StagedView · ConfirmState · Message
+helpers   base_dir · cache_path · settings_path · overrides_path · load_overrides ·
+          save_overrides · rules · scan_any · exec_options · staged_snapshot · classify
+impl App  logic:  start_scan · quarantine_picked · quarantine_path · restore_all · purge_ids ·
+                   start_inspection · run_ai · drain
+views     summary · review · quarantine_panel · tabs · map · inspector · ai_pane · rules_pane ·
+          confirm_modal
+helpers   build_visuals · tile_fill · size_fill · pressed · metric · space_meter · draw_inspection ·
+          cell · legend_item · pretty · last_component · clamp_label · on_fill · stat · mft_probe ·
+          mft_replay · selftest · main
 ```
 
-Work runs on a `std::thread`; results return as `Message` over an `mpsc` channel and are drained
-at the top of `update()`. There is no async runtime and no task graph.
+Line numbers drift every session; grep the function name instead.
 
-**Ported:** rule engine, tokens, scanner, executor (quarantine/restore/purge/journal),
-`inspect_staged`, squarified treemap layout, hardware probe, CLI
-(`scan|quarantine|list|restore|purge`), native window (scan → map → review → quarantine →
-restore → purge, with a purge confirmation listing real filenames).
+Work runs on `std::thread`; results return as `Message` over an `mpsc` channel and are drained at
+the top of `update()`. There is no async runtime and no task graph.
 
-**Not ported:** spotlight tour, AI layer, `find_unclassified`, MFT reader.
+**Ported and working:** rule engine, tokens, scanner (walk **and** MFT), executor
+(quarantine/restore/purge/journal), `inspect_staged`, scan cache, squarified treemap, hardware
+probe, inspection layer, local AI, rules editor, CLI (`scan|quarantine|list|restore|purge`),
+native window with five views (Map / Review / Quarantine / AI / Rules) and the purge confirmation.
+
+**Not ported:** spotlight tour, cloud AI provider, multi-drive, elevated tier, `--cached`
+reclassify.
 
 **Rules load differently in the two front ends — this bites.** The CLI reads `rules/rules.json`
 from disk (searching cwd, beside the exe, and `--rules <path>`). The native app
@@ -388,53 +436,45 @@ Be precise about this when reporting status — the user checks.
 
 ## 11. Roadmap — ordered, with first actions
 
-### v2 (active)
+### Shipped (do not rebuild these)
 
-**1. Treemap — shipped in `171017e`.** Map/Review tabs, area is bytes, colour is safety,
-hover shows the full path, size, share and the rule's reason; click zooms, `‹ up` walks back.
-The two traps it cleared are worth knowing because they shaped the code:
+| Item | Commit | Note |
+|---|---|---|
+| Treemap, nested, Status/Size colouring | `171017e` → `fed1366` | `layout.rs` holds the maths, 5 tests |
+| Memory meters (RAM + free VRAM) | `502734b` | `hardware.rs`, never guesses |
+| Scan cache (0.64 MB, instant open) | `498bb04` | `cache.rs`, rules-hash invalidated |
+| Local AI via Ollama, ceiling REVIEW | `80a484a` | `ai.rs`, 8 tests, evaluated at 43.8% on rule-protected folders |
+| Inspection layer (contents, not names) | `d026648` | `inspect.rs`, the CapCut lesson |
+| Rules editor with `overrides.json` | `d026648` | order-preserving merge |
+| Light/dark, mono chrome, red accent | `a7f0572` | `Palette` + `pal()` |
+| MFT scanner, walk as fallback | `9bb29e4` → `731e7b2` | `mft.rs`; 423.6 GB in 4.9 s vs the walk's 410.7 GB in 75 s |
+| Purge dialog, press feedback | `f945c5c`, `1bfd9ca` | card, not a stock window |
 
-- `scan()` returns a **flat `Vec<DirEntry>`** — `ScanReport { root, dirs, total_bytes,
-  total_files, skipped, duration_ms }`, no parent links and no children. `parent_of()` and
-  `depth_of()` in `rules.rs` are now `pub`.
-- The native app **used to discard `report.dirs`** after classifying. It now builds a pruned
-  node graph in the scan thread (`nodes: HashMap<String, NodeInfo>` plus
-  `levels: HashMap<String, Vec<String>>`), with a floor of `total_bytes / 200_000` clamped to
-  2 MB. Parents are always at least as large as their children, so nothing reachable is lost.
+### v2 — what is actually next
 
-**2. Memory meters — shipped in `502734b`.** RAM from `GlobalMemoryStatusEx`, VRAM from
-`nvidia-smi` because it is the only source that reports *free* video memory; WMI's `AdapterRAM`
-is a 32-bit field that reports an 8 GB card as 4 GB. A background thread polls RAM every 1.5 s
-and the GPU about every 6 s — the subprocess costs ~244 ms and must never run on a drawing
-frame. When no NVIDIA adapter answers, the UI prints an em dash instead of a guess, and
-`--probe` prints the readout without scanning 400 GB.
+**1. Release v0.1.0 — the only item that changes who can use this.** There is still no installer:
+a stranger needs Rust. `cargo build --release` already produces both binaries; a zip plus release
+notes is an hour. Decide the honour-system question at the same time: unsigned means SmartScreen
+says "Unknown publisher", exactly as v1 does.
 
-**3. Guided tour — do this next.** v1's `TourOverlay.tsx` is the reference: a list of steps,
-each with a target `Rect`, a heading, and body copy; everything else dims. In egui the dim is a
-`layer_painter` fill plus a hole — and note §7.7, an `Area`'s painter is clipped to its own
-content rect.
+**2. Guided tour.** v1's `TourOverlay.tsx` is the reference: steps with a target `Rect`, heading
+and copy, everything else dimmed. In egui the dim is a `layer_painter` fill plus a hole — and note
+§7.7, an `Area`'s painter is clipped to its own content rect.
 
-**4. AI panel.** Port providers and hardware gating from `src/shared/ai/*` in v1. Keep the
-ceiling at `REVIEW` and keep targeting unclassified folders; both were decisions, not defaults.
+**3. Cloud AI provider.** Wired in v1, never tested against a live endpoint. Do not port an
+unverified path; test first.
 
-**5. MFT scanner.** The actual reason Rust was chosen. `scan.rs` is isolated (one public
-`scan(root) -> ScanReport`) so it can be replaced without touching rules, executor, or UI.
+**4. Exclude from Scan.** Needs the scanner to take an exclusion list *and* the cache to
+invalidate on it — the one small feature with real plumbing.
 
-**6. Scan cache — the biggest remaining gap.** v1 reopens to a populated map instantly from
-`scan-cache.json` (58 MB of JSON). v2 rescans for ~90 s every launch. Do not copy v1's format:
-a front-coded arena (one `Vec` of fixed-size nodes plus a shared name blob) is ~6–10 MB and
-loads in tens of milliseconds, which also keeps the RAM promise that a parsed JSON tree would
-break.
+**5. Multi-drive, elevated tier.** Neither repo has the elevated tier (`hiberfil.sys`, Windows
+Update cache, DISM). It needs a UAC helper that re-validates paths itself.
 
 ### v1 (maintenance)
 
-1. **Inspection layer** — highest value in either repo: read folder *contents* (extension mix,
-   largest files, hash-named vs human-named) so classification stops guessing from names. This
-   is what would have caught the CapCut cache holding a named video export, and it is the only
-   way the ~72 GB sitting in Review becomes actionable.
-2. Elevated tier (`hiberfil.sys`, Windows Update cache, DISM/WinSxS) behind a UAC helper that
-   re-validates every path itself rather than trusting the caller.
-3. Code signing, auto-update, "reset rules to defaults", uninstall prompt.
+1. **Ship the inspection layer here too** — v2 has it (`inspect.rs`), v1 does not, and v1 is the
+   product people download. The CapCut case is still only half solved on the supported branch.
+2. Elevated tier, code signing, auto-update, uninstall prompt.
 
 ---
 
@@ -454,3 +494,10 @@ break.
 - Do not edit `rules.json` in only one repo — the two copies are byte-identical and must stay so.
 - Do not round-trip source files through PowerShell (§8). Use the editor tools or Node with
   explicit `utf8`.
+- **Do not leave a behaviour change undocumented.** Counts, crate lists, roadmap items and
+  decisions change with the code; update them in the same commit (§0). A handoff that describes
+  a previous version gets rebuilt by the next agent.
+- **Do not hand-edit `graphify-out/`.** It is generated: rebuild it with `/graphify .`.
+- Do not run `restore --all` against the user's live profile as "cleanup" — that is how a
+  deliberately quarantined 4.7 GB folder came back on 2026-10-28. List first, act on your own
+  staging only.

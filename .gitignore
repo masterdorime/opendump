@@ -19,3 +19,6 @@ rules/overrides.json
 
 # brag video output - deliverable, not source
 brag-output*/
+
+# graphify knowledge graph - generated, rebuild with /graphify .
+graphify-out/
