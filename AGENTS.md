@@ -3,7 +3,7 @@
 Everything a fresh agent needs to continue without re-deriving it. Read this first, then
 `README.md` (user-facing) and `CONTRIBUTING.md` (rules).
 
-**Last updated:** 2026-10-27 · session ended mid-roadmap, both repos clean.
+**Last updated:** 2026-10-29 · v2 v0.1.0 released · both repos clean.
 
 ---
 
@@ -14,12 +14,12 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Path | `C:\Users\TRISTAN\drive size audit` | `C:\Users\TRISTAN\opendump-v2` |
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
-| Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **no release yet** |
+| Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **released 2026-10-29** (`v0.1.0`) |
 | Last code commit | `8d1a4f7` | `1bfd9ca` |
 | Tests | **72** (vitest) | **73** (cargo) |
 | Lines | ~5,450 TS/TSX | **7,865** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 6.93 MB exe, ~95 MB idle, ~130 MB with a map |
-| Status | **the supported product** | pre-alpha; full shell, local AI, MFT, cache — no tour, no release |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 7.0 MB exe (window), 1.9 MB CLI, ~95 MB idle, ~130 MB with a map |
+| Status | **the supported product** | released, pre-tour; full shell, local AI, MFT, cache — no tour, no signing |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
 > file itself is one. If `git log --oneline` shows work beyond those SHAs, this document is
@@ -104,8 +104,8 @@ v1 is the working product: full UI, local AI, signed-off releases. v2 is a Rust 
 - v1 installs **366 MB** and idles at **377 MB** — awkward for a disk/memory tool.
 - The scan is the real bottleneck, and an MFT reader is a native-code problem.
 
-v2 has not replaced v1. Nobody should be told to use v2 yet: it has no tour, no AI, no cache and
-no signed build.
+v2 has not replaced v1. Nobody should be told to use v2 as their daily driver yet: it has no guided
+tour and no signed build, and it has only ever run on one machine at one DPI.
 
 **A Tauri shell was built and then deleted.** It worked (9.98 MB exe, 2.26 MB installer) but
 duplicated the native window for **316 MB of WebView2**. Do not re-add a webview front end
@@ -200,7 +200,7 @@ Existing releases: v0.1.0 → v0.5.0, each with `-portable.exe` and `-setup.exe`
 ## 4. v2 state — Rust
 
 ```
-crates/opendump-core/   ~2,600 src + ~900 test lines
+crates/opendump-core/   3,702 src + 568 test lines
   types.rs      Tier, Rule, RuleMatch, DirEntry
   tokens.rs     %LOCALAPPDATA%-style expansion, injectable map
   rules.rs      compile, AND matchers, find_candidates, find_unclassified, parent_of/depth_of
@@ -214,7 +214,7 @@ crates/opendump-core/   ~2,600 src + ~900 test lines
   cache.rs      versioned binary scan cache, front-coded paths, rules-hash invalidated
   format.rs     bytes(), thousands() — shared by every front end
 crates/opendump-cli/    448 lines — opendump.exe (1.91 MB)
-apps/native/            ~3,300 lines — opendump-native.exe (6.93 MB), egui + glow
+apps/native/            3,147 lines — opendump-native.exe (7.0 MB), egui + glow
 ```
 
 `apps/native/src/main.rs` is one file, deliberately — everything about the window is in reach:
@@ -283,8 +283,8 @@ from v1's profile.
 | Folders / files | 375,541 / 1.86 M | 368,204 / 1.73 M |
 | Idle RAM | 377 MB (4 procs) | **89 MB (1 proc)** |
 | After a scan | — | 107 MB |
-| Installer | 116.6 MB | — (raw exe 6.29 MB) |
-| Installed | 366 MB | ~6 MB |
+| Installer | 116.6 MB | - (raw exe 7.0 MB) |
+| Installed | 366 MB | ~9 MB (both exes) |
 
 Correctness: v2 was cross-checked against `robocopy /L` on `Users` (223.1 GB / 999,946 files —
 exact), `Windows`, `ProgramData`, `Program Files` — all matched.
@@ -453,22 +453,21 @@ Be precise about this when reporting status — the user checks.
 
 ### v2 — what is actually next
 
-**1. Release v0.1.0 — the only item that changes who can use this.** There is still no installer:
-a stranger needs Rust. `cargo build --release` already produces both binaries; a zip plus release
-notes is an hour. Decide the honour-system question at the same time: unsigned means SmartScreen
-says "Unknown publisher", exactly as v1 does.
-
-**2. Guided tour.** v1's `TourOverlay.tsx` is the reference: steps with a target `Rect`, heading
+**1. Guided tour.** v1's `TourOverlay.tsx` is the reference: steps with a target `Rect`, heading
 and copy, everything else dimmed. In egui the dim is a `layer_painter` fill plus a hole — and note
 §7.7, an `Area`'s painter is clipped to its own content rect.
 
-**3. Cloud AI provider.** Wired in v1, never tested against a live endpoint. Do not port an
+> Release v0.1.0 shipped 2026-10-29: `opendump-0.1.0-windows-x64.zip`, unsigned, tagged `v0.1.0`
+> on the v2 repo. The recipe (build both workspaces, stage the exes **with `rules/rules.json`**,
+> zip, tag, release) is in v2's `AGENTS.md` §7.
+
+**2. Cloud AI provider.** Wired in v1, never tested against a live endpoint. Do not port an
 unverified path; test first.
 
-**4. Exclude from Scan.** Needs the scanner to take an exclusion list *and* the cache to
+**3. Exclude from Scan.** Needs the scanner to take an exclusion list *and* the cache to
 invalidate on it — the one small feature with real plumbing.
 
-**5. Multi-drive, elevated tier.** Neither repo has the elevated tier (`hiberfil.sys`, Windows
+**4. Multi-drive, elevated tier.** Neither repo has the elevated tier (`hiberfil.sys`, Windows
 Update cache, DISM). It needs a UAC helper that re-validates paths itself.
 
 ### v1 (maintenance)
