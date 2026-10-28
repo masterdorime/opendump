@@ -52,9 +52,10 @@ graphify explain "findCandidates"                      # one node, in plain lang
 graphify path "compileRules" "executor"                # shortest path between two concepts
 ```
 
-Built 2026-10-29: **51 files · 411 nodes · 915 edges · 17 communities**, AST for code (free) plus
-semantic extraction for 10 docs. `graphify-out/GRAPH_REPORT.md` is the readable summary;
-`graph.html` opens in a browser with no server.
+Built 2026-10-29: **51 files · 425 nodes · 889 edges · 14 communities**, AST for the 41 code files
+(free) plus semantic extraction for 9 docs and 1 image. Measured from `graphify-out/graph.json` —
+re-read the number out of the graph rather than copying this line. `graphify-out/GRAPH_REPORT.md`
+is the readable summary; `graph.html` opens in a browser with no server.
 
 **Rebuild after structural change** — a new module, a moved file, a deleted feature:
 
