@@ -14,11 +14,11 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Path | `C:\Users\TRISTAN\drive size audit` | `C:\Users\TRISTAN\opendump-v2` |
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
-| Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.0, **released 2026-10-29** (`v0.1.0`) |
+| Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.1, **released 2026-11-01** (`v0.1.1`) |
 | Last code commit | `8d1a4f7` | `1bfd9ca` |
 | Tests | **72** (vitest) | **73** (cargo) |
 | Lines | ~5,450 TS/TSX | **7,865** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 7.0 MB exe (window), 1.9 MB CLI, ~95 MB idle, ~130 MB with a map |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 9.1 MB exe (window), 1.9 MB CLI, ~95 MB idle, ~130 MB with a map |
 | Status | **the supported product** | released, pre-tour; full shell, local AI, MFT, cache — no tour, no signing |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
@@ -457,9 +457,10 @@ Be precise about this when reporting status — the user checks.
 and copy, everything else dimmed. In egui the dim is a `layer_painter` fill plus a hole — and note
 §7.7, an `Area`'s painter is clipped to its own content rect.
 
-> Release v0.1.0 shipped 2026-10-29: `opendump-0.1.0-windows-x64.zip`, unsigned, tagged `v0.1.0`
-> on the v2 repo. The recipe (build both workspaces, stage the exes **with `rules/rules.json`**,
-> zip, tag, release) is in v2's `AGENTS.md` §7.
+> Two releases shipped: **v0.1.1** on 2026-11-01 (sidebar layout, summary cards, persistent right
+> rail, mascot) and v0.1.0 on 2026-10-29. Both unsigned windows-x64 zips on the v2 repo. The recipe
+> (build both workspaces, stage the exes **with `rules/rules.json`**, zip, tag, release) is in v2's
+> `AGENTS.md` §7.
 
 **2. Cloud AI provider.** Wired in v1, never tested against a live endpoint. Do not port an
 unverified path; test first.
