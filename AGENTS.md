@@ -3,7 +3,7 @@
 Everything a fresh agent needs to continue without re-deriving it. Read this first, then
 `README.md` (user-facing) and `CONTRIBUTING.md` (rules).
 
-**Last updated:** 2026-10-29 · v2 v0.1.0 released · both repos clean.
+**Last updated:** 2026-11-05 · v2 v0.2.0 released (zip + installer) · both repos clean.
 
 ---
 
@@ -14,12 +14,12 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Path | `C:\Users\TRISTAN\drive size audit` | `C:\Users\TRISTAN\opendump-v2` |
 | Repo | https://github.com/masterdorime/opendump | https://github.com/masterdorime/opendump-v2 |
 | Stack | Electron 45 · React 19 · TypeScript 5.8 | Rust (core + CLI + egui window) |
-| Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.1.1, **released 2026-11-01** (`v0.1.1`) |
+| Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.2.0, **released 2026-11-05** (`v0.2.0`, zip + installer) |
 | Last code commit | `8d1a4f7` | `1bfd9ca` |
-| Tests | **72** (vitest) | **73** (cargo) |
-| Lines | ~5,450 TS/TSX | **7,865** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 9.1 MB exe (window), 1.9 MB CLI, ~95 MB idle, ~130 MB with a map |
-| Status | **the supported product** | released, pre-tour; full shell, local AI, MFT, cache — no tour, no signing |
+| Tests | **72** (vitest) | **78** (cargo) |
+| Lines | ~5,450 TS/TSX | **9,557** Rust |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 10.9 MB exe (window), 1.9 MB CLI, ~95 MB idle, ~130 MB with a map |
+| Status | **the supported product** | released; full shell, tour, local + opt-in cloud AI, MFT, cache — no signing |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
 > file itself is one. If `git log --oneline` shows work beyond those SHAs, this document is
@@ -31,10 +31,11 @@ Both working trees are clean. Both remotes are public and pushed. CI (GitHub Act
 ### Start here
 
 1. Read §3 and §4 to learn what each binary actually does today.
-2. **The shell matches v1** as of `806f258` — red dark theme, nested treemap, inspector,
-   three peer views, free-space meter. `crates/opendump-core/src/layout.rs` holds the squarify
-   maths and `hardware.rs` the probes; both are tested under `cargo test`. The next piece of
-   work is the guided tour, then the scan cache.
+2. **v2 now has the shell, the tour, exclusions and multi-drive.** Sidebar navigation, six
+   summary cards, a persistent right rail with the guide card, and an eight-step action-gated tour
+   narrated by Kiroku-chan. `layout.rs` holds the squarify maths, `hardware.rs` the probes, and
+   `cloud.rs` the opt-in (unverified) cloud client. The only work left that matters is code
+   signing; see §11.
 3. Before touching anything that deletes, read §1 and §6. Those are constraints, not taste.
 4. If you change `rules/rules.json`, remember it exists twice (§4) and that the native app
    bakes it in at compile time.
@@ -211,6 +212,7 @@ crates/opendump-core/   3,702 src + 568 test lines
   hardware.rs   GlobalMemoryStatusEx RAM, nvidia-smi VRAM, GetDiskFreeSpaceEx
   inspect.rs    folder contents: extension mix, largest files, hashed-vs-human names
   ai.rs         localhost Ollama client, prompt, schema, parse_verdicts (REVIEW ceiling)
+  cloud.rs      opt-in OpenAI-compatible client: payload preview, 45 s timeout, REVIEW ceiling
   cache.rs      versioned binary scan cache, front-coded paths, rules-hash invalidated
   format.rs     bytes(), thousands() — shared by every front end
 crates/opendump-cli/    448 lines — opendump.exe (1.91 MB)
@@ -244,8 +246,8 @@ the top of `update()`. There is no async runtime and no task graph.
 probe, inspection layer, local AI, rules editor, CLI (`scan|quarantine|list|restore|purge`),
 native window with five views (Map / Review / Quarantine / AI / Rules) and the purge confirmation.
 
-**Not ported:** spotlight tour, cloud AI provider, multi-drive, elevated tier, `--cached`
-reclassify.
+**Not ported:** elevated tier (decided against), `--cached` reclassify. The tour, cloud client
+and multi-drive landed in v0.2.0; the cloud path has never been run against a live endpoint.
 
 **Rules load differently in the two front ends — this bites.** The CLI reads `rules/rules.json`
 from disk (searching cwd, beside the exe, and `--rules <path>`). The native app
@@ -256,7 +258,7 @@ after a rebuild; the CLI picks it up immediately. The v1 and v2 copies are byte-
 ### v2 commands
 
 ```bash
-cargo test --workspace                 # 41 tests
+cargo test --workspace                 # 78 tests
 cargo run --release                    # CLI
 ./target/release/opendump scan "C:\" --top 20
 ./target/release/opendump quarantine <path> --yes
@@ -279,11 +281,11 @@ from v1's profile.
 
 | Metric | v1 Electron | v2 native |
 | --- | --- | --- |
-| Full `C:\` scan | 172 s idle / 299 s loaded | **91.7–102.8 s** |
+| Full `C:\` scan | 172 s idle / 299 s loaded | **91.7–102.8 s** idle; **164 s** measured on a loaded machine (2026-11-04) |
 | Folders / files | 375,541 / 1.86 M | 368,204 / 1.73 M |
 | Idle RAM | 377 MB (4 procs) | **89 MB (1 proc)** |
 | After a scan | — | 107 MB |
-| Installer | 116.6 MB | - (raw exe 7.0 MB) |
+| Installer | 116.6 MB | **5.8 MB** Inno Setup, per-user, no UAC (0.2.0) |
 | Installed | 366 MB | ~9 MB (both exes) |
 
 Correctness: v2 was cross-checked against `robocopy /L` on `Users` (223.1 GB / 999,946 files —
@@ -453,23 +455,22 @@ Be precise about this when reporting status — the user checks.
 
 ### v2 — what is actually next
 
-**1. Guided tour.** v1's `TourOverlay.tsx` is the reference: steps with a target `Rect`, heading
-and copy, everything else dimmed. In egui the dim is a `layer_painter` fill plus a hole — and note
-§7.7, an `Area`'s painter is clipped to its own content rect.
+**1. Code signing.** The only thing standing between "downloadable" and "trustworthy". Every artefact
+is unsigned, so SmartScreen says "Unknown publisher". This needs a certificate, not work; until one
+exists, both release notes say so plainly.
 
-> Two releases shipped: **v0.1.1** on 2026-11-01 (sidebar layout, summary cards, persistent right
-> rail, mascot) and v0.1.0 on 2026-10-29. Both unsigned windows-x64 zips on the v2 repo. The recipe
-> (build both workspaces, stage the exes **with `rules/rules.json`**, zip, tag, release) is in v2's
-> `AGENTS.md` §7.
+**2. A live test of the cloud client.** `cloud.rs` ships opt-in and unverified by decision: off by
+default, key in memory only, payload shown before sending, 45 s timeout, verdicts capped at REVIEW by
+the same `parse_verdicts` as the local path. Nobody has pointed it at a real endpoint yet.
 
-**2. Cloud AI provider.** Wired in v1, never tested against a live endpoint. Do not port an
-unverified path; test first.
+**3. Multi-drive, proven.** `stage_root_for` routes an item from another volume to
+`<volume>:\DriveSizeAuditQuarantine`, and the routing is unit-tested — but this machine has one
+volume, so no real cross-volume rename has happened.
 
-**3. Exclude from Scan.** Needs the scanner to take an exclusion list *and* the cache to
-invalidate on it — the one small feature with real plumbing.
-
-**4. Multi-drive, elevated tier.** Neither repo has the elevated tier (`hiberfil.sys`, Windows
-Update cache, DISM). It needs a UAC helper that re-validates paths itself.
+**Decided against: the elevated tier.** `hiberfil.sys`, `pagefile.sys`, the Windows Update cache and
+`WinSxS` are reported as `LOCKED` and never removed: none of them can be deleted (they are `powercfg`,
+System Properties, a stopped service and `DISM`), so there is no quarantine, no journal and no undo.
+See v2's `AGENTS.md` for the full reasoning.
 
 ### v1 (maintenance)
 
