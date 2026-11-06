@@ -17,8 +17,8 @@ Everything a fresh agent needs to continue without re-deriving it. Read this fir
 | Version | **0.5.0** (5 releases, latest `v0.5.0`) | 0.2.0, **released 2026-11-05** (`v0.2.0`, zip + installer) |
 | Last code commit | `8d1a4f7` | `1bfd9ca` |
 | Tests | **72** (vitest) | **78** (cargo) |
-| Lines | ~5,450 TS/TSX | **9,557** Rust |
-| Installed / binary | 366 MB installed, 116.6 MB installer | 10.9 MB exe (window), 1.9 MB CLI, ~95 MB idle, ~130 MB with a map |
+| Lines | ~5,450 TS/TSX | **9,588** Rust |
+| Installed / binary | 366 MB installed, 116.6 MB installer | 10.4 MB exe (window), 1.9 MB CLI, ~120 MB idle (measured 2026-11-06) |
 | Status | **the supported product** | released; full shell, tour, local + opt-in cloud AI, MFT, cache — no signing |
 
 > The SHAs above are the last **code** commits. Docs-only commits sit on top of them, and this
